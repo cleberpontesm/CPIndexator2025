@@ -28,9 +28,9 @@ FORM_DEFINITIONS = {
 }
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
 EXPORT_COLUMN_ORDER = {
-    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS],
-    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS],
-    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS]
+    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['ultima_alteracao_por'],
+    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['ultima_alteracao_por'],
+    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['ultima_alteracao_por']
 }
 
 # Mapeamento de nomes de colunas para labels amigáveis
@@ -69,7 +69,8 @@ COLUMN_LABELS = {
     'fonte_livro': 'Fonte (Livro)',
     'fonte_pagina_folha': 'Fonte (Página/Folha)',
     'observacoes': 'Observações',
-    'caminho_da_imagem': 'Caminho da Imagem'
+    'caminho_da_imagem': 'Caminho da Imagem',
+    'ultima_alteracao_por': 'Última Alteração Por' ## ADICIONADO ##
 }
 
 # Colunas essenciais para a visualização em tabela (índice/catálogo)
@@ -438,11 +439,11 @@ def generate_pdf_detailed(records_by_type):
                 
                 # Determinar quais campos mostrar baseado no tipo de registro
                 if record_type == "Nascimento/Batismo":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS]
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['ultima_alteracao_por']
                 elif record_type == "Casamento":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS]
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['ultima_alteracao_por']
                 elif record_type == "Óbito":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS]
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['ultima_alteracao_por']
                 else:
                     fields_order = sorted(record.keys())
                 
@@ -512,11 +513,14 @@ def main_app():
     st.sidebar.title("Bem-vindo(a)!")
     st.sidebar.info(f"Logado como: {st.session_state.user.email}")
     if st.sidebar.button("Sair (Logout)"):
-        del st.session_state.user
+        # Limpar todo o session_state ao sair para evitar vazamento de dados entre sessões
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
 
     st.title("CPIndexator - Painel Principal")
-    tab_add, tab_manage, tab_export = st.tabs(["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados"])
+    ## MODIFICADO ## - Adicionada a aba de Administração
+    tab_add, tab_manage, tab_export, tab_admin = st.tabs(["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados", "⚙️ Administração"])
 
     with tab_add:
         st.header("Adicionar Novo Registro")
@@ -544,8 +548,9 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
-                            cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()]
-                            vals = [record_type] + [value for value in entries.values()]
+                            ## MODIFICADO ## - Adiciona o usuário da alteração ao inserir
+                            cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()] + ["ultima_alteracao_por"]
+                            vals = [record_type] + [value for value in entries.values()] + [st.session_state.user.email]
                             placeholders = ', '.join([f':{c}' for c in cols])
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             params = dict(zip(cols, vals))
@@ -576,48 +581,105 @@ def main_app():
             st.dataframe(df_records, use_container_width=True, hide_index=True)
             
             st.header("Gerenciar Registro Selecionado")
-            record_id_to_manage = st.number_input("Digite o ID do registro para ver detalhes, editar ou excluir:", min_value=1, step=1, value=None)
+            record_id_to_manage = st.number_input("Digite o ID do registro para ver detalhes, editar ou excluir:", min_value=1, step=1, value=None, key="record_id_input")
+            
             if record_id_to_manage:
+                if 'record_id' not in st.session_state or st.session_state.record_id != record_id_to_manage:
+                    st.session_state.record_id = record_id_to_manage
+                    if 'manage_action' in st.session_state:
+                        del st.session_state.manage_action
+
                 record = fetch_single_record(record_id_to_manage)
                 if record:
-                    st.success(f"Registro ID {record_id_to_manage} encontrado!")
-                    
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         if st.button("📋 Ver Detalhes", use_container_width=True):
                             st.session_state.manage_action = "view"
+                            st.rerun()
                     with col2:
                         if st.button("✏️ Editar", use_container_width=True):
                             st.session_state.manage_action = "edit"
+                            st.rerun()
                     with col3:
                         if st.button("🗑️ Excluir", use_container_width=True):
                             st.session_state.manage_action = "delete"
-                    
-                    if hasattr(st.session_state, 'manage_action'):
-                        if st.session_state.manage_action == "view":
-                            st.subheader("Detalhes do Registro")
-                            for key, value in record.items():
-                                if value:
-                                    label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
-                                    st.text(f"{label}: {value}")
-                        
-                        elif st.session_state.manage_action == "edit":
-                            st.info("Funcionalidade de edição em desenvolvimento.")
-                        
-                        elif st.session_state.manage_action == "delete":
-                            st.warning(f"Tem certeza que deseja excluir o registro ID {record_id_to_manage}?")
-                            if st.button("Confirmar Exclusão", type="primary"):
-                                try:
-                                    with engine.connect() as conn:
-                                        conn.execute(text("DELETE FROM registros WHERE id = :id"), {'id': record_id_to_manage})
-                                        conn.commit()
-                                        st.success("Registro excluído com sucesso!")
-                                        del st.session_state.manage_action
-                                        st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro ao excluir: {e}")
+                            st.rerun()
                 else:
                     st.error(f"Registro ID {record_id_to_manage} não encontrado.")
+
+            if 'manage_action' in st.session_state and 'record_id' in st.session_state and st.session_state.record_id:
+                record_id = st.session_state.record_id
+                record = fetch_single_record(record_id)
+                if not record:
+                    st.error(f"Registro ID {record_id} não encontrado. Pode ter sido excluído.")
+                    return
+
+                action = st.session_state.manage_action
+                st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
+                st.markdown("---")
+
+                if action == "view":
+                    for key, value in record.items():
+                        if value:
+                            label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
+                            st.write(f"**{label}:** {value}")
+                
+                ## MODIFICADO ## - Funcionalidade de edição ativada
+                elif action == "edit":
+                    record_type = record.get('tipo_registro')
+                    if not record_type:
+                        st.error("Tipo de registro não definido. Não é possível editar.")
+                        return
+
+                    with st.form("edit_record_form"):
+                        st.info(f"Editando registro de {record_type}")
+                        fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
+                        updated_entries = {}
+                        
+                        for field in fields:
+                            col_name = to_col_name(field)
+                            # Pega o valor atual do registro para preencher o campo
+                            current_value = record.get(col_name, "")
+                            updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+
+                        submitted = st.form_submit_button("Salvar Alterações")
+                        if submitted:
+                            try:
+                                with engine.connect() as conn:
+                                    # Monta a query de UPDATE
+                                    set_clause = ", ".join([f"{col} = :{col}" for col in updated_entries.keys()])
+                                    ## MODIFICADO ## - Adiciona o usuário que alterou na query
+                                    set_clause += ", ultima_alteracao_por = :user_email"
+                                    
+                                    query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
+                                    
+                                    # Adiciona o email do usuário e o ID aos parâmetros
+                                    params = updated_entries
+                                    params['id'] = record_id
+                                    params['user_email'] = st.session_state.user.email
+                                    
+                                    conn.execute(query, params)
+                                    conn.commit()
+                                    st.success("Registro atualizado com sucesso!")
+                                    # Limpa o estado para fechar o formulário de edição
+                                    del st.session_state.manage_action
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Ocorreu um erro ao atualizar: {e}")
+                
+                elif action == "delete":
+                    st.warning(f"Tem certeza que deseja excluir o registro ID {record_id}?")
+                    if st.button("Confirmar Exclusão", type="primary"):
+                        try:
+                            with engine.connect() as conn:
+                                conn.execute(text("DELETE FROM registros WHERE id = :id"), {'id': record_id})
+                                conn.commit()
+                                st.success("Registro excluído com sucesso!")
+                                del st.session_state.manage_action
+                                del st.session_state.record_id
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao excluir: {e}")
 
     with tab_export:
         st.header("Exportar Dados")
@@ -694,6 +756,58 @@ def main_app():
                             st.error(f"Erro ao gerar arquivo: {e}")
         else:
             st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
+
+    ## ADICIONADO ## - Nova aba para administração do banco de dados
+    with tab_admin:
+        st.header("⚙️ Administração do Banco de Dados")
+        st.markdown("---")
+
+        # Seção de Exportação (Backup)
+        st.subheader("Exportar Backup Completo")
+        st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV, que pode ser usado como backup.")
+        if st.button("Gerar Arquivo de Backup (CSV)"):
+            try:
+                with engine.connect() as conn:
+                    df = pd.read_sql_table('registros', conn)
+                    csv = df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Baixar Backup CSV",
+                        data=csv,
+                        file_name="cpindexator_backup_completo.csv",
+                        mime="text/csv",
+                    )
+            except Exception as e:
+                st.error(f"Erro ao exportar o banco de dados: {e}")
+
+        st.markdown("---")
+
+        # Seção de Importação (Restaurar)
+        st.subheader("Importar de um Backup")
+        st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados do arquivo. Use com cuidado!")
+        
+        uploaded_file = st.file_uploader("Escolha um arquivo CSV de backup", type="csv")
+        
+        if uploaded_file is not None:
+            confirm_import = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
+            if st.button("Iniciar Importação", disabled=not confirm_import):
+                if confirm_import:
+                    try:
+                        df_to_import = pd.read_csv(uploaded_file)
+                        with engine.connect() as conn:
+                            # Transação: apaga tudo e depois insere. Se a inserção falhar, o rollback é automático.
+                            with conn.begin(): 
+                                conn.execute(text("DELETE FROM registros"))
+                                df_to_import.to_sql('registros', conn, if_exists='append', index=False)
+                            
+                            st.success(f"Importação concluída com sucesso! {len(df_to_import)} registros foram importados.")
+                            st.info("A página será atualizada para refletir os novos dados.")
+                            st.rerun()
+
+                    except Exception as e:
+                        st.error(f"Erro durante a importação: {e}")
+                        st.info("A operação foi revertida. Seus dados antigos estão seguros.")
+                else:
+                    st.error("Você precisa confirmar a ação para continuar.")
 
 
 # --- ROTEADOR PRINCIPAL ---
