@@ -82,8 +82,6 @@ def fetch_records(search_term="", selected_books=None):
         params = {}
         conditions = []
 
-        # CORREÇÃO DEFINITIVA: Usa o estilo de parâmetro nomeado (:key) de forma consistente para TUDO.
-        # Isso garante que não haja conflitos entre as bibliotecas.
         book_placeholders = ', '.join([f':book_{i}' for i in range(len(selected_books))])
         conditions.append(f"fonte_livro IN ({book_placeholders})")
         for i, book in enumerate(selected_books):
@@ -91,13 +89,19 @@ def fetch_records(search_term="", selected_books=None):
 
         if search_term:
             params['like_term'] = f"%{search_term}%"
-            text_columns = ['nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'padrinhos', 'avo_paterno', 'avo_paterna', 'avo_materno', 'avo_materna', 'nome_do_noivo', 'pai_do_noivo', 'mae_do_noivo', 'nome_da_noiva', 'pai_da_noiva', 'mae_da_noiva', 'testemunhas', 'nome_do_falecido', 'filiacao', 'conjuge_sobrevivente', 'observacoes']
+            # CORREÇÃO DEFINITIVA: A lista de colunas para busca estava incompleta.
+            # Esta lista agora contém TODAS as colunas de texto possíveis.
+            text_columns = [
+                'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'padrinhos', 'avo_paterno', 'avo_paterna', 
+                'avo_materno', 'avo_materna', 'nome_do_noivo', 'pai_do_noivo', 'mae_do_noivo', 'nome_da_noiva', 
+                'pai_da_noiva', 'mae_da_noiva', 'testemunhas', 'nome_do_falecido', 'filiacao', 
+                'conjuge_sobrevivente', 'deixou_filhos', 'causa_mortis', 'local_do_sepultamento', 
+                'fonte_livro', 'fonte_pagina_folha', 'observacoes', 'caminho_da_imagem'
+            ]
             conditions.append(f"({ ' OR '.join([f'{col} ILIKE :like_term' for col in text_columns]) })")
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
-        # CORREÇÃO DEFINITIVA: Removemos o pd.read_sql e executamos a query diretamente,
-        # depois criamos o DataFrame. Isso é mais robusto.
         result_proxy = conn.execute(text(final_query), params)
         results = result_proxy.fetchall()
         columns = result_proxy.keys()
@@ -111,7 +115,6 @@ def fetch_records(search_term="", selected_books=None):
             return df_display
         else:
             return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
-
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
