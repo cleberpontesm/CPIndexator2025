@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL CORRIGIDA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL CORRIGIDA v2 - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -60,8 +60,8 @@ engine = init_db_connection()
 # --- FUNÇÕES DE LÓGICA DO BANCO DE DADOS E EXPORTAÇÃO ---
 
 def to_col_name(field_name):
-    # CORREÇÃO: Normaliza para remover acentos e caracteres especiais comuns
-    clean_name = field_name.lower().replace("ã", "a").replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ô", "o").replace("â", "a")
+    # CORREÇÃO FINAL: Adicionado o .replace("õ", "o")
+    clean_name = field_name.lower().replace("ã", "a").replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ô", "o").replace("â", "a").replace("õ", "o")
     # Continua com a limpeza de espaços e outros caracteres
     return clean_name.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").replace("?", "")
 
@@ -107,13 +107,11 @@ def fetch_data_for_export(selected_books):
         return [row._asdict() for row in result]
 
 def generate_excel_bytes(all_data, grouping_key, column_name_mapper):
-    # Esta função está pronta para ser implementada com a lógica de exportação completa
     output_buffer = BytesIO()
     st.warning("Lógica de geração de Excel ainda não implementada no código final.")
     return output_buffer.getvalue()
 
 def generate_pdf_bytes(all_data, grouping_key, column_name_mapper):
-    # Esta função está pronta para ser implementada com a lógica de exportação completa
     pdf_buffer = BytesIO()
     st.warning("Lógica de geração de PDF ainda não implementada no código final.")
     return pdf_buffer.getvalue()
