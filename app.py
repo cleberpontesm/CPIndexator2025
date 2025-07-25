@@ -137,13 +137,13 @@ def fetch_records(search_term="", selected_books=None):
     Busca registros no banco de dados com tratamento robusto de erros
     """
     if not selected_books:
-        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
+        # Adiciona a nova coluna ao DataFrame vazio
+        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
 
     try:
         with engine.connect() as conn:
-            # Query simples e robusta - buscar todos os campos
+            # A query `SELECT *` já busca a coluna `ultima_alteracao_por`
             if search_term:
-                # Com termo de busca - usar query mais simples
                 query = """
                 SELECT * FROM registros 
                 WHERE fonte_livro = ANY(:books)
@@ -159,12 +159,8 @@ def fetch_records(search_term="", selected_books=None):
                 )
                 ORDER BY id
                 """
-                params = {
-                    'books': selected_books,
-                    'search_term': f'%{search_term}%'
-                }
+                params = {'books': selected_books, 'search_term': f'%{search_term}%'}
             else:
-                # Sem termo de busca
                 query = """
                 SELECT * FROM registros 
                 WHERE fonte_livro = ANY(:books)
@@ -172,15 +168,13 @@ def fetch_records(search_term="", selected_books=None):
                 """
                 params = {'books': selected_books}
             
-            # Executar query
             result = conn.execute(text(query), params)
             df = pd.DataFrame(result.fetchall())
             
             if not df.empty:
-                # Adicionar nomes de colunas
                 df.columns = result.keys()
                 
-                # Criar coluna Nome Principal
+                # Lógica para criar as colunas 'Nome Principal' e 'Data'
                 df['Nome Principal'] = 'N/A'
                 if 'nome_do_registrado' in df.columns:
                     df.loc[df['nome_do_registrado'].notna(), 'Nome Principal'] = df.loc[df['nome_do_registrado'].notna(), 'nome_do_registrado']
@@ -189,39 +183,45 @@ def fetch_records(search_term="", selected_books=None):
                 if 'nome_do_falecido' in df.columns:
                     df.loc[(df['Nome Principal'] == 'N/A') & df['nome_do_falecido'].notna(), 'Nome Principal'] = df.loc[(df['Nome Principal'] == 'N/A') & df['nome_do_falecido'].notna(), 'nome_do_falecido']
                 
-                # Criar coluna Data
                 df['Data'] = 'N/A'
                 if 'data_do_evento' in df.columns:
                     df.loc[df['data_do_evento'].notna(), 'Data'] = df.loc[df['data_do_evento'].notna(), 'data_do_evento']
                 if 'data_do_obito' in df.columns:
                     df.loc[(df['Data'] == 'N/A') & df['data_do_obito'].notna(), 'Data'] = df.loc[(df['Data'] == 'N/A') & df['data_do_obito'].notna(), 'data_do_obito']
                 
-                # Preparar DataFrame final
+                # Define as colunas a serem exibidas na tabela final
                 columns_to_show = []
                 rename_dict = {}
                 
+                # Colunas padrão
                 if 'id' in df.columns:
                     columns_to_show.append('id')
                     rename_dict['id'] = 'ID'
-                    
                 if 'tipo_registro' in df.columns:
                     columns_to_show.append('tipo_registro')
                     rename_dict['tipo_registro'] = 'Tipo'
-                    
+                
                 columns_to_show.extend(['Nome Principal', 'Data'])
                 
                 if 'fonte_livro' in df.columns:
                     columns_to_show.append('fonte_livro')
                     rename_dict['fonte_livro'] = 'Livro Fonte'
                 
+                # Inclui a coluna de quem alterou por último
+                if 'ultima_alteracao_por' in df.columns:
+                    columns_to_show.append('ultima_alteracao_por')
+                    rename_dict['ultima_alteracao_por'] = 'Alterado Por'
+                
                 return df[columns_to_show].rename(columns=rename_dict)
             else:
-                return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
+                # Adiciona a nova coluna ao DataFrame vazio
+                return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
                 
     except Exception as e:
         st.error(f"Erro ao buscar registros: {str(e)}")
         st.info("Verifique se a estrutura do banco de dados está correta.")
-        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
+        # Adiciona a nova coluna ao DataFrame de erro
+        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
@@ -520,7 +520,7 @@ def main_app():
 
     st.title("CPIndexator - Painel Principal")
 
-    # --- LÓGICA DE CONTROLE DE ACESSO PARA AS ABAS (VERSÃO CORRIGIDA) ---
+    # --- LÓGICA DE CONTROLE DE ACESSO PARA AS ABAS ---
     
     # Pega o e-mail do usuário logado de forma segura
     user_email = ""
