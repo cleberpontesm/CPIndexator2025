@@ -27,10 +27,11 @@ FORM_DEFINITIONS = {
     "Óbito": ["Data do Registro", "Data do Óbito", "Local do Óbito", "Nome do Falecido", "Idade no Óbito", "Filiação", "Cônjuge Sobrevivente", "Deixou Filhos?", "Causa Mortis", "Local do Sepultamento"]
 }
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
+## MODIFICADO ## - Adicionada a coluna criado_por para exportação
 EXPORT_COLUMN_ORDER = {
-    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['ultima_alteracao_por'],
-    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['ultima_alteracao_por'],
-    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['ultima_alteracao_por']
+    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
+    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
+    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por']
 }
 
 # Mapeamento de nomes de colunas para labels amigáveis
@@ -70,6 +71,7 @@ COLUMN_LABELS = {
     'fonte_pagina_folha': 'Fonte (Página/Folha)',
     'observacoes': 'Observações',
     'caminho_da_imagem': 'Caminho da Imagem',
+    'criado_por': 'Criado Por',  ## ADICIONADO ##
     'ultima_alteracao_por': 'Última Alteração Por'
 }
 
@@ -132,17 +134,17 @@ def get_table_columns():
         result = conn.execute(query).fetchall()
         return [row[0] for row in result]
 
+## MODIFICADO ## - Função fetch_records ajustada para exibir as novas colunas
 def fetch_records(search_term="", selected_books=None):
     """
     Busca registros no banco de dados com tratamento robusto de erros
     """
+    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Alterado Por']
     if not selected_books:
-        # Adiciona a nova coluna ao DataFrame vazio
-        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
+        return pd.DataFrame(columns=new_columns)
 
     try:
         with engine.connect() as conn:
-            # A query `SELECT *` já busca a coluna `ultima_alteracao_por`
             if search_term:
                 query = """
                 SELECT * FROM registros 
@@ -174,7 +176,6 @@ def fetch_records(search_term="", selected_books=None):
             if not df.empty:
                 df.columns = result.keys()
                 
-                # Lógica para criar as colunas 'Nome Principal' e 'Data'
                 df['Nome Principal'] = 'N/A'
                 if 'nome_do_registrado' in df.columns:
                     df.loc[df['nome_do_registrado'].notna(), 'Nome Principal'] = df.loc[df['nome_do_registrado'].notna(), 'nome_do_registrado']
@@ -189,11 +190,9 @@ def fetch_records(search_term="", selected_books=None):
                 if 'data_do_obito' in df.columns:
                     df.loc[(df['Data'] == 'N/A') & df['data_do_obito'].notna(), 'Data'] = df.loc[(df['Data'] == 'N/A') & df['data_do_obito'].notna(), 'data_do_obito']
                 
-                # Define as colunas a serem exibidas na tabela final
                 columns_to_show = []
                 rename_dict = {}
                 
-                # Colunas padrão
                 if 'id' in df.columns:
                     columns_to_show.append('id')
                     rename_dict['id'] = 'ID'
@@ -207,21 +206,22 @@ def fetch_records(search_term="", selected_books=None):
                     columns_to_show.append('fonte_livro')
                     rename_dict['fonte_livro'] = 'Livro Fonte'
                 
-                # Inclui a coluna de quem alterou por último
+                if 'criado_por' in df.columns:
+                    columns_to_show.append('criado_por')
+                    rename_dict['criado_por'] = 'Criado Por'
+                
                 if 'ultima_alteracao_por' in df.columns:
                     columns_to_show.append('ultima_alteracao_por')
                     rename_dict['ultima_alteracao_por'] = 'Alterado Por'
                 
                 return df[columns_to_show].rename(columns=rename_dict)
             else:
-                # Adiciona a nova coluna ao DataFrame vazio
-                return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
+                return pd.DataFrame(columns=new_columns)
                 
     except Exception as e:
         st.error(f"Erro ao buscar registros: {str(e)}")
         st.info("Verifique se a estrutura do banco de dados está correta.")
-        # Adiciona a nova coluna ao DataFrame de erro
-        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Alterado Por'])
+        return pd.DataFrame(columns=new_columns)
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
@@ -230,7 +230,6 @@ def fetch_single_record(record_id):
         return result._asdict() if result else None
 
 def generate_excel_bytes(records_by_type):
-    """Gera arquivo Excel com os registros organizados por tipo"""
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
         return None
@@ -240,16 +239,13 @@ def generate_excel_bytes(records_by_type):
         for record_type, records in records_by_type.items():
             if records:
                 df = pd.DataFrame(records)
-                # Reordenar colunas conforme definido
                 if record_type in EXPORT_COLUMN_ORDER:
                     columns_order = [col for col in EXPORT_COLUMN_ORDER[record_type] if col in df.columns]
                     df = df[columns_order]
                 
-                # Escrever no Excel
-                sheet_name = record_type[:31]  # Excel tem limite de 31 caracteres
+                sheet_name = record_type[:31]
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
                 
-                # Aplicar formatação
                 worksheet = writer.sheets[sheet_name]
                 for column in worksheet.columns:
                     max_length = 0
@@ -266,7 +262,6 @@ def generate_excel_bytes(records_by_type):
     return output.getvalue()
 
 def generate_pdf_table(records_by_type):
-    """Gera arquivo PDF em formato de tabela (índice/catálogo)"""
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
         return None
@@ -276,43 +271,23 @@ def generate_pdf_table(records_by_type):
     story = []
     styles = getSampleStyleSheet()
     
-    # Estilos personalizados
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1f4788'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#1f4788'), spaceAfter=30, alignment=TA_CENTER)
+    section_style = ParagraphStyle('SectionTitle', parent=styles['Heading2'], fontSize=18, textColor=colors.HexColor('#2e5090'), spaceAfter=20)
     
-    section_style = ParagraphStyle(
-        'SectionTitle',
-        parent=styles['Heading2'],
-        fontSize=18,
-        textColor=colors.HexColor('#2e5090'),
-        spaceAfter=20
-    )
-    
-    # Título principal
     story.append(Paragraph("Índice de Registros - CPIndexator", title_style))
     story.append(Spacer(1, 0.5*inch))
     
     for record_type, records in records_by_type.items():
         if records:
-            # Título da seção
             story.append(Paragraph(f"Registros de {record_type}", section_style))
             story.append(Paragraph(f"Total: {len(records)} registros", styles['Normal']))
             story.append(Spacer(1, 0.2*inch))
             
-            # Preparar dados para tabela
             df = pd.DataFrame(records)
             
-            # Selecionar apenas as colunas essenciais para visualização em tabela
             if record_type in TABLE_COLUMNS:
                 columns_to_show = [col for col in TABLE_COLUMNS[record_type] if col in df.columns]
             else:
-                # Fallback para colunas básicas
                 columns_to_show = ['id', 'tipo_registro']
                 if 'nome_do_registrado' in df.columns: columns_to_show.append('nome_do_registrado')
                 if 'nome_do_noivo' in df.columns: columns_to_show.append('nome_do_noivo')
@@ -324,35 +299,27 @@ def generate_pdf_table(records_by_type):
             
             df_filtered = df[columns_to_show]
             
-            # Criar cabeçalhos com labels amigáveis
             headers = [COLUMN_LABELS.get(col, col.replace('_', ' ').title()) for col in columns_to_show]
             
-            # Preparar dados da tabela
             data = [headers]
             for _, row in df_filtered.iterrows():
                 row_data = []
                 for col in columns_to_show:
                     value = str(row[col]) if pd.notna(row[col]) else ''
-                    # Limitar tamanho do texto para caber na tabela
                     if len(value) > 50:
                         value = value[:47] + '...'
                     row_data.append(value)
                 data.append(row_data)
             
-            # Criar tabela
             table = ReportlabTable(data)
             
-            # Estilo da tabela
             table_style = TableStyle([
-                # Cabeçalho
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 11),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                
-                # Corpo da tabela
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 9),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
@@ -368,8 +335,8 @@ def generate_pdf_table(records_by_type):
     doc.build(story)
     return output.getvalue()
 
+## MODIFICADO ## - Função generate_pdf_detailed ajustada para incluir criado_por
 def generate_pdf_detailed(records_by_type):
-    """Gera arquivo PDF com TODOS os campos dos registros (relatório detalhado)"""
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
         return None
@@ -379,92 +346,49 @@ def generate_pdf_detailed(records_by_type):
     story = []
     styles = getSampleStyleSheet()
     
-    # Criar estilos personalizados
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1f4788'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#1f4788'), spaceAfter=30, alignment=TA_CENTER)
+    section_style = ParagraphStyle('SectionTitle', parent=styles['Heading2'], fontSize=18, textColor=colors.HexColor('#2e5090'), spaceAfter=20, spaceBefore=30)
+    record_header_style = ParagraphStyle('RecordHeader', parent=styles['Heading3'], fontSize=14, textColor=colors.HexColor('#333333'), spaceAfter=12, leftIndent=20)
+    field_style = ParagraphStyle('FieldStyle', parent=styles['Normal'], fontSize=11, leftIndent=40, spaceAfter=8)
     
-    section_style = ParagraphStyle(
-        'SectionTitle',
-        parent=styles['Heading2'],
-        fontSize=18,
-        textColor=colors.HexColor('#2e5090'),
-        spaceAfter=20,
-        spaceBefore=30
-    )
-    
-    record_header_style = ParagraphStyle(
-        'RecordHeader',
-        parent=styles['Heading3'],
-        fontSize=14,
-        textColor=colors.HexColor('#333333'),
-        spaceAfter=12,
-        leftIndent=20
-    )
-    
-    field_style = ParagraphStyle(
-        'FieldStyle',
-        parent=styles['Normal'],
-        fontSize=11,
-        leftIndent=40,
-        spaceAfter=8
-    )
-    
-    # Adicionar título principal
     story.append(Paragraph("Relatório Detalhado de Registros - CPIndexator", title_style))
     story.append(Spacer(1, 0.5*inch))
     
-    # Processar registros por tipo
     for record_type, records in records_by_type.items():
         if records:
-            # Título da seção
             story.append(Paragraph(f"Registros de {record_type}", section_style))
             story.append(Paragraph(f"Total de registros: {len(records)}", styles['Normal']))
             story.append(Spacer(1, 0.2*inch))
             
-            # Processar cada registro individualmente
             for idx, record in enumerate(records, 1):
-                # Cabeçalho do registro
                 nome_principal = record.get('nome_do_registrado') or record.get('nome_do_noivo') or record.get('nome_do_falecido') or 'Sem nome'
                 header_text = f"Registro #{idx} - ID: {record.get('id', 'N/A')} - {nome_principal}"
                 story.append(Paragraph(header_text, record_header_style))
                 
-                # Criar uma tabela de duas colunas para os campos
                 data = []
                 
-                # Determinar quais campos mostrar baseado no tipo de registro
+                fields_order = []
+                common_audit_fields = ['criado_por', 'ultima_alteracao_por']
                 if record_type == "Nascimento/Batismo":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['ultima_alteracao_por']
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + common_audit_fields
                 elif record_type == "Casamento":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['ultima_alteracao_por']
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + common_audit_fields
                 elif record_type == "Óbito":
-                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['ultima_alteracao_por']
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + common_audit_fields
                 else:
                     fields_order = sorted(record.keys())
                 
-                # Adicionar campos à tabela
                 for field in fields_order:
-                    if field in record and record[field]:
-                        # Obter o label amigável do campo
+                    if field in record and pd.notna(record[field]) and record[field] != '':
                         label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
                         value = str(record[field])
-                        
-                        # Quebrar valores muito longos
                         if len(value) > 60:
                             value = Paragraph(value, styles['Normal'])
-                        
                         data.append([Paragraph(f"<b>{label}:</b>", field_style), value])
                 
-                # Se não há dados, adicionar mensagem
                 if not data:
                     data.append([Paragraph("Sem dados disponíveis", field_style), ""])
                 
-                # Criar tabela
                 table = ReportlabTable(data, colWidths=[2.5*inch, 4*inch])
                 table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -480,15 +404,12 @@ def generate_pdf_detailed(records_by_type):
                 story.append(table)
                 story.append(Spacer(1, 0.3*inch))
                 
-                # Adicionar linha divisória entre registros
                 if idx < len(records):
                     story.append(Paragraph("<hr/>", styles['Normal']))
                     story.append(Spacer(1, 0.1*inch))
             
-            # Quebra de página após cada tipo de registro
             story.append(PageBreak())
     
-    # Construir o PDF
     doc.build(story)
     return output.getvalue()
 
@@ -513,46 +434,27 @@ def main_app():
     st.sidebar.title("Bem-vindo(a)!")
     st.sidebar.info(f"Logado como: {st.session_state.user.email}")
     if st.sidebar.button("Sair (Logout)"):
-        # Limpar todo o session_state ao sair para evitar vazamento de dados entre sessões
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
 
     st.title("CPIndexator - Painel Principal")
 
-    # --- LÓGICA DE CONTROLE DE ACESSO PARA AS ABAS ---
-    
-    # Pega o e-mail do usuário logado de forma segura
     user_email = ""
     if hasattr(st.session_state, 'user') and st.session_state.user is not None:
         user_email = st.session_state.user.email
     
-    # Pega a lista de administradores dos secrets. Retorna uma lista vazia se não for encontrada.
     admin_list = st.secrets.get("ADMIN_USERS", [])
-
-    # Verifica se o usuário é um administrador
     is_admin = user_email in admin_list
 
-    # Define a lista de abas a serem criadas
-    tabs_to_create = [
-        "➕ Adicionar Registro", 
-        "🔍 Consultar e Gerenciar", 
-        "📤 Exportar Dados"
-    ]
+    tabs_to_create = ["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados"]
     if is_admin:
         tabs_to_create.append("⚙️ Administração")
 
-    # Cria as abas
     created_tabs = st.tabs(tabs_to_create)
-
-    # Atribui as abas a variáveis para facilitar o acesso
-    tab_add = created_tabs[0]
-    tab_manage = created_tabs[1]
-    tab_export = created_tabs[2]
+    tab_add, tab_manage, tab_export = created_tabs[0], created_tabs[1], created_tabs[2]
     if is_admin:
         tab_admin = created_tabs[3]
-
-    # --- FIM DA LÓGICA DE CONTROLE DE ACESSO ---
 
     with tab_add:
         st.header("Adicionar Novo Registro")
@@ -580,9 +482,9 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
-                            # Adiciona o usuário da alteração ao inserir
-                            cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()] + ["ultima_alteracao_por"]
-                            vals = [record_type] + [value for value in entries.values()] + [user_email] # Usa user_email
+                            ## MODIFICADO ## - Salva quem criou e quem alterou (são a mesma pessoa na criação)
+                            cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()] + ["criado_por", "ultima_alteracao_por"]
+                            vals = [record_type] + [value for value in entries.values()] + [user_email, user_email]
                             placeholders = ', '.join([f':{c}' for c in cols])
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             params = dict(zip(cols, vals))
@@ -683,7 +585,7 @@ def main_app():
                                     
                                     params = updated_entries
                                     params['id'] = record_id
-                                    params['user_email'] = user_email # Usa user_email
+                                    params['user_email'] = user_email
                                     
                                     conn.execute(query, params)
                                     conn.commit()
@@ -723,19 +625,16 @@ def main_app():
                     pdf_style = None
                     if export_format == "PDF":
                         st.subheader("Opções de PDF")
-                        pdf_style = st.radio(
-                            "Estilo do PDF:",
-                            ["Tabela (Índice/Catálogo)", "Relatório Detalhado"],
-                            help="**Tabela**: Visão geral compacta com campos principais\n\n**Relatório Detalhado**: Todos os campos de cada registro"
-                        )
+                        pdf_style = st.radio("Estilo do PDF:", ["Tabela (Índice/Catálogo)", "Relatório Detalhado"],
+                            help="**Tabela**: Visão geral compacta com campos principais\n\n**Relatório Detalhado**: Todos os campos de cada registro")
                         
                         col1, col2 = st.columns(2)
                         with col1:
                             if pdf_style == "Tabela (Índice/Catálogo)":
-                                st.info("📊 **Formato Tabela**\n\nIdeal para ter uma visão geral dos registros, como um índice ou catálogo. Mostra apenas os campos essenciais em formato compacto.")
+                                st.info("📊 **Formato Tabela**\n\nIdeal para ter uma visão geral dos registros...")
                         with col2:
                             if pdf_style == "Relatório Detalhado":
-                                st.info("📋 **Formato Detalhado**\n\nExibe todos os campos de cada registro. Ideal para análise completa ou impressão de fichas individuais.")
+                                st.info("📋 **Formato Detalhado**\n\nExibe todos os campos de cada registro...")
                     
                     if st.button("Gerar Arquivo para Download", type="primary"):
                         try:
@@ -752,13 +651,8 @@ def main_app():
                                     if export_format == "Excel":
                                         file_bytes = generate_excel_bytes(dict(records_by_type))
                                         if file_bytes:
-                                            st.download_button(
-                                                label="📥 Baixar Excel",
-                                                data=file_bytes,
-                                                file_name="cpindexator_export.xlsx",
-                                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            )
-                                    else:  # PDF
+                                            st.download_button("📥 Baixar Excel", file_bytes, "cpindexator_export.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                                    else:
                                         if pdf_style == "Tabela (Índice/Catálogo)":
                                             file_bytes = generate_pdf_table(dict(records_by_type))
                                             filename = "cpindexator_indice.pdf"
@@ -767,12 +661,7 @@ def main_app():
                                             filename = "cpindexator_relatorio_detalhado.pdf"
                                         
                                         if file_bytes:
-                                            st.download_button(
-                                                label="📥 Baixar PDF",
-                                                data=file_bytes,
-                                                file_name=filename,
-                                                mime="application/pdf"
-                                            )
+                                            st.download_button("📥 Baixar PDF", file_bytes, filename, "application/pdf")
                                 else:
                                     st.warning("Nenhum registro encontrado nos livros selecionados.")
                         except Exception as e:
@@ -780,13 +669,10 @@ def main_app():
         else:
             st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
 
-    # O conteúdo da aba de administração só é processado se o usuário for admin
     if is_admin:
         with tab_admin:
             st.header("⚙️ Administração do Banco de Dados")
             st.markdown("---")
-
-            # Seção de Exportação (Backup)
             st.subheader("Exportar Backup Completo")
             st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV, que pode ser usado como backup.")
             if st.button("Gerar Arquivo de Backup (CSV)"):
@@ -794,18 +680,11 @@ def main_app():
                     with engine.connect() as conn:
                         df = pd.read_sql_table('registros', conn)
                         csv = df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Baixar Backup CSV",
-                            data=csv,
-                            file_name="cpindexator_backup_completo.csv",
-                            mime="text/csv",
-                        )
+                        st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
                 except Exception as e:
                     st.error(f"Erro ao exportar o banco de dados: {e}")
 
             st.markdown("---")
-
-            # Seção de Importação (Restaurar)
             st.subheader("Importar de um Backup")
             st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados do arquivo. Use com cuidado!")
             
@@ -818,7 +697,6 @@ def main_app():
                         try:
                             df_to_import = pd.read_csv(uploaded_file)
                             with engine.connect() as conn:
-                                # Transação: apaga tudo e depois insere. Se a inserção falhar, o rollback é automático.
                                 with conn.begin(): 
                                     conn.execute(text("DELETE FROM registros"))
                                     df_to_import.to_sql('registros', conn, if_exists='append', index=False)
@@ -832,7 +710,6 @@ def main_app():
                             st.info("A operação foi revertida. Seus dados antigos estão seguros.")
                     else:
                         st.error("Você precisa confirmar a ação para continuar.")
-
 
 # --- ROTEADOR PRINCIPAL ---
 if 'user' not in st.session_state:
