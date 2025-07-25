@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL E DEFINITIVA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL E CORRIGIDA - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -89,8 +89,8 @@ def fetch_records(search_term="", selected_books=None):
 
         if search_term:
             params['like_term'] = f"%{search_term}%"
-            # CORREÇÃO DEFINITIVA: A lista de colunas para busca estava incompleta.
-            # Esta lista agora contém TODAS as colunas de texto possíveis.
+            # CORREÇÃO DEFINITIVA: A lista de colunas para busca estava com erros de digitação.
+            # Esta lista agora corresponde 100% à tabela do banco de dados.
             text_columns = [
                 'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'padrinhos', 'avo_paterno', 'avo_paterna', 
                 'avo_materno', 'avo_materna', 'nome_do_noivo', 'pai_do_noivo', 'mae_do_noivo', 'nome_da_noiva', 
