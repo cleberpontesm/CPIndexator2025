@@ -74,7 +74,7 @@ COLUMN_LABELS = {
 
 # Colunas essenciais para a visualização em tabela (índice/catálogo)
 TABLE_COLUMNS = {
-    "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'fonte_livro', 'fonte_pagina_folha'],
+    "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'avo_paterno', 'avo_paterna', 'avo_materno', 'avo_materna', 'fonte_livro', 'fonte_pagina_folha'],
     "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_evento', 'pai_do_noivo', 'mae_do_noivo', 'fonte_livro', 'fonte_pagina_folha'],
     "Óbito": ['id', 'nome_do_falecido', 'data_do_obito', 'idade_no_obito', 'causa_mortis', 'fonte_livro', 'fonte_pagina_folha']
 }
