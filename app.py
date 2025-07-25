@@ -77,7 +77,7 @@ def fetch_records(search_term="", selected_books=None):
         return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
 
     with engine.connect() as conn:
-        # CORREÇÃO FINAL: Removido o acento de 'data_do_obito' para corresponder à tabela
+        # CORREÇÃO FINAL E DEFINITIVA: Removido o acento de 'data_do_obito'
         base_query = "SELECT id, tipo_registro, nome_do_registrado, nome_do_noivo, nome_do_falecido, data_do_evento, data_do_obito, fonte_livro FROM registros"
         
         params = {}
@@ -109,7 +109,7 @@ def fetch_records(search_term="", selected_books=None):
 
         if not df.empty:
             df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
-            # CORREÇÃO FINAL: Usar 'data_do_obito' sem acento aqui também
+            # CORREÇÃO FINAL E DEFINITIVA: Usar 'data_do_obito' sem acento aqui também
             df['Data'] = df['data_do_evento'].fillna(df['data_do_obito']).fillna('N/A')
             df_display = df[['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro']].rename(columns={'id': 'ID', 'tipo_registro': 'Tipo', 'fonte_livro': 'Livro Fonte'})
             return df_display
