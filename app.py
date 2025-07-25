@@ -103,13 +103,15 @@ def fetch_data_for_export(selected_books):
         return [row._asdict() for row in result]
 
 def generate_excel_bytes(all_data, grouping_key, column_name_mapper):
+    # Esta função está pronta para ser implementada com a lógica de exportação completa
     output_buffer = BytesIO()
-    # ... (código de geração de Excel completo, sem alterações)
+    st.warning("Lógica de geração de Excel ainda não implementada no código final.")
     return output_buffer.getvalue()
 
 def generate_pdf_bytes(all_data, grouping_key, column_name_mapper):
+    # Esta função está pronta para ser implementada com a lógica de exportação completa
     pdf_buffer = BytesIO()
-    # ... (código de geração de PDF completo, sem alterações)
+    st.warning("Lógica de geração de PDF ainda não implementada no código final.")
     return pdf_buffer.getvalue()
 
 # --- INTERFACE DO APLICATIVO ---
@@ -169,16 +171,14 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
-                            # As colunas e os valores
                             cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()]
                             vals = [record_type] + [value for value in entries.values()]
                             
-                            # MUDANÇA CRÍTICA: Usamos %s como placeholder
                             placeholders = ', '.join(['%s'] * len(cols))
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             
-                            # MUDANÇA CRÍTICA: Passamos os valores como uma tupla
-                            conn.execute(text(query), tuple(vals))
+                            # CORREÇÃO FINAL: Passamos os valores como uma LISTA contendo uma tupla
+                            conn.execute(text(query), [tuple(vals)])
                             conn.commit()
                             st.success("Registro adicionado com sucesso!")
                             st.rerun()
@@ -206,18 +206,7 @@ def main_app():
 
     with tab_export:
         st.header("Exportar Dados")
-        if not EXPORT_LIBS_AVAILABLE:
-            st.error("Bibliotecas de exportação não encontradas.")
-        else:
-            st.info("A exportação usará os livros selecionados no filtro abaixo.")
-            all_books_export = get_distinct_values("fonte_livro")
-            selected_books_export = st.multiselect("Selecione os livros para exportar:", all_books_export, default=all_books_export, key="export_books_select")
-
-            if not selected_books_export:
-                st.warning("Selecione ao menos um livro para exportar.")
-            else:
-                # ... (código da aba de exportar que já fizemos) ...
-                st.info("Funcionalidade de exportação em desenvolvimento.")
+        st.info("Funcionalidade de exportação em desenvolvimento.")
 
 
 # --- ROTEADOR PRINCIPAL ---
