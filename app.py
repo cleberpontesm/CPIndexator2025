@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL E CORRIGIDA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL E DEFINITIVA - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -74,7 +74,7 @@ def get_distinct_values(column_name):
 
 def fetch_records(search_term="", selected_books=None):
     if not selected_books:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
 
     with engine.connect() as conn:
         base_query = "SELECT id, tipo_registro, nome_do_registrado, nome_do_noivo, nome_do_falecido, data_do_evento, data_do_óbito, fonte_livro FROM registros"
@@ -89,8 +89,6 @@ def fetch_records(search_term="", selected_books=None):
 
         if search_term:
             params['like_term'] = f"%{search_term}%"
-            # CORREÇÃO DEFINITIVA: A lista de colunas para busca estava com erros de digitação.
-            # Esta lista agora corresponde 100% à tabela do banco de dados.
             text_columns = [
                 'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'padrinhos', 'avo_paterno', 'avo_paterna', 
                 'avo_materno', 'avo_materna', 'nome_do_noivo', 'pai_do_noivo', 'mae_do_noivo', 'nome_da_noiva', 
@@ -102,6 +100,7 @@ def fetch_records(search_term="", selected_books=None):
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
+        # --- CORREÇÃO DEFINITIVA: Removemos o pd.read_sql e executamos em duas etapas ---
         result_proxy = conn.execute(text(final_query), params)
         results = result_proxy.fetchall()
         columns = result_proxy.keys()
