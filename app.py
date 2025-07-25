@@ -518,7 +518,28 @@ def main_app():
             del st.session_state[key]
         st.rerun()
 
+    # --- CÓDIGO DE DIAGNÓSTICO TEMPORÁRIO ---
+    st.warning(f"SESSÃO DE DEBUG (remover após resolver o problema):")
+    
+    # 1. Pega o e-mail do usuário logado
+    user_email_debug = st.session_state.user.email
+    st.write(f"E-mail do usuário logado: `{user_email_debug}`")
+    
+    # 2. Tenta pegar a lista de administradores dos Secrets
+    admin_list_debug = st.secrets.get("ADMIN_USERS", "SEGREDO 'ADMIN_USERS' NÃO ENCONTRADO!")
+    st.write(f"Lista de administradores carregada dos Secrets: `{admin_list_debug}`")
+
+    # 3. Realiza a verificação e mostra o resultado
+    if isinstance(admin_list_debug, list):
+        is_admin_debug = user_email_debug in admin_list_debug
+        st.write(f"Resultado da verificação (o usuário é admin?): `{is_admin_debug}`")
+    else:
+        st.error("O valor de 'ADMIN_USERS' não foi carregado como uma lista. Verifique o arquivo secrets.toml.")
+    st.markdown("---")
+    # --- FIM DO CÓDIGO DE DIAGNÓSTICO ---
+
     st.title("CPIndexator - Painel Principal")
+    
     ## MODIFICADO ## - Adicionada a aba de Administração
     tab_add, tab_manage, tab_export, tab_admin = st.tabs(["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados", "⚙️ Administração"])
 
