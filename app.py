@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL CORRIGIDA v3 - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL CORRIGIDA v4 - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -72,29 +72,32 @@ def get_distinct_values(column_name):
         except:
             return []
 
+# CORREÇÃO FINAL ESTÁ NESTA FUNÇÃO
 def fetch_records(search_term="", selected_books=None):
     if not selected_books:
         return pd.DataFrame()
 
     with engine.connect() as conn:
         base_query = "SELECT id, tipo_registro, nome_do_registrado, nome_do_noivo, nome_do_falecido, data_do_evento, data_do_óbito, fonte_livro FROM registros"
-        params = []
-        conditions = []
-
-        placeholders = ', '.join(['%s'] * len(selected_books))
-        conditions.append(f"fonte_livro IN ({placeholders})")
-        params.extend(selected_books)
+        
+        # Usaremos um dicionário para os parâmetros nomeados (estilo :nome)
+        params = {'books': tuple(selected_books)}
+        conditions = ["fonte_livro IN :books"]
 
         if search_term:
-            like_term = f"%{search_term}%"
+            params['like_term'] = f"%{search_term}%"
             text_columns = ['nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'padrinhos', 'avo_paterno', 'avo_paterna', 'avo_materno', 'avo_materna', 'nome_do_noivo', 'pai_do_noivo', 'mae_do_noivo', 'nome_da_noiva', 'pai_da_noiva', 'mae_da_noiva', 'testemunhas', 'nome_do_falecido', 'filiacao', 'conjuge_sobrevivente', 'observacoes']
-            like_conditions = ' OR '.join([f'{col} ILIKE %s' for col in text_columns])
-            conditions.append(f"({like_conditions})")
-            params.extend([like_term] * len(text_columns))
+            
+            # Adiciona a condição ILIKE usando o parâmetro nomeado :like_term
+            conditions.append(f"({ ' OR '.join([f'{col} ILIKE :like_term' for col in text_columns]) })")
         
+        # Junta tudo na query final
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
-        df = pd.read_sql(final_query, conn, params=params)
+        
+        # Usa sqlalchemy.text() para garantir que os parâmetros nomeados sejam processados corretamente
+        df = pd.read_sql(text(final_query), conn, params=params)
 
+        # O resto da função continua igual
         df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
         df['Data'] = df['data_do_evento'].fillna(df['data_do_óbito']).fillna('N/A')
         df_display = df[['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro']].rename(columns={'id': 'ID', 'tipo_registro': 'Tipo', 'fonte_livro': 'Livro Fonte'})
@@ -140,10 +143,8 @@ def main_app():
         all_books = get_distinct_values("fonte_livro")
         all_locations = get_distinct_values("local_do_evento")
         col1, col2 = st.columns(2)
-        with col1:
-            book_preset = st.selectbox("Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
-        with col2:
-            location_preset = st.selectbox("Preencher 'Local do Evento' com:", [""] + all_locations, key="location_preset_add")
+        with col1: book_preset = st.selectbox("Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
+        with col2: location_preset = st.selectbox("Preencher 'Local do Evento' com:", [""] + all_locations, key="location_preset_add")
         
         record_type = st.selectbox("Tipo de Registro:", list(FORM_DEFINITIONS.keys()), index=None, placeholder="Selecione...")
         
@@ -194,7 +195,6 @@ def main_app():
     with tab_export:
         st.header("Exportar Dados")
         st.info("Funcionalidade de exportação em desenvolvimento.")
-
 
 # --- ROTEADOR PRINCIPAL ---
 if 'user' not in st.session_state:
