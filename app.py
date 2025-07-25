@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL CORRIGIDA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL COM PDF CORRIGIDO - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -10,10 +10,12 @@ import os
 # --- Bloco de importação de bibliotecas de exportação ---
 try:
     from openpyxl.worksheet.table import Table, TableStyleInfo
-    from reportlab.lib.pagesizes import A3, landscape
-    from reportlab.platypus import SimpleDocTemplate, Table as ReportlabTable, TableStyle, Paragraph, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.platypus import SimpleDocTemplate, Table as ReportlabTable, TableStyle, Paragraph, PageBreak, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
     EXPORT_LIBS_AVAILABLE = True
 except ImportError:
     EXPORT_LIBS_AVAILABLE = False
@@ -29,6 +31,45 @@ EXPORT_COLUMN_ORDER = {
     "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS],
     "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS],
     "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS]
+}
+
+# Mapeamento de nomes de colunas para labels amigáveis
+COLUMN_LABELS = {
+    'id': 'ID',
+    'tipo_registro': 'Tipo de Registro',
+    'data_do_registro': 'Data do Registro',
+    'data_do_evento': 'Data do Evento',
+    'data_do_obito': 'Data do Óbito',
+    'local_do_evento': 'Local do Evento',
+    'local_do_obito': 'Local do Óbito',
+    'nome_do_registrado': 'Nome do Registrado',
+    'nome_do_pai': 'Nome do Pai',
+    'nome_da_mae': 'Nome da Mãe',
+    'padrinhos': 'Padrinhos',
+    'avo_paterno': 'Avô Paterno',
+    'avo_paterna': 'Avó Paterna',
+    'avo_materno': 'Avô Materno',
+    'avo_materna': 'Avó Materna',
+    'nome_do_noivo': 'Nome do Noivo',
+    'idade_do_noivo': 'Idade do Noivo',
+    'pai_do_noivo': 'Pai do Noivo',
+    'mae_do_noivo': 'Mãe do Noivo',
+    'nome_da_noiva': 'Nome da Noiva',
+    'idade_da_noiva': 'Idade da Noiva',
+    'pai_da_noiva': 'Pai da Noiva',
+    'mae_da_noiva': 'Mãe da Noiva',
+    'testemunhas': 'Testemunhas',
+    'nome_do_falecido': 'Nome do Falecido',
+    'idade_no_obito': 'Idade no Óbito',
+    'filiacao': 'Filiação',
+    'conjuge_sobrevivente': 'Cônjuge Sobrevivente',
+    'deixou_filhos': 'Deixou Filhos',
+    'causa_mortis': 'Causa Mortis',
+    'local_do_sepultamento': 'Local do Sepultamento',
+    'fonte_livro': 'Fonte (Livro)',
+    'fonte_pagina_folha': 'Fonte (Página/Folha)',
+    'observacoes': 'Observações',
+    'caminho_da_imagem': 'Caminho da Imagem'
 }
 
 # --- CONFIGURAÇÃO INICIAL E CLIENTES ---
@@ -217,44 +258,126 @@ def generate_excel_bytes(records_by_type):
     return output.getvalue()
 
 def generate_pdf_bytes(records_by_type):
-    """Gera arquivo PDF com os registros organizados por tipo"""
+    """Gera arquivo PDF com TODOS os campos dos registros organizados por tipo"""
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
         return None
     
     output = BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=landscape(A3))
+    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     story = []
     styles = getSampleStyleSheet()
     
+    # Criar estilos personalizados
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1f4788'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    section_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontSize=18,
+        textColor=colors.HexColor('#2e5090'),
+        spaceAfter=20,
+        spaceBefore=30
+    )
+    
+    record_header_style = ParagraphStyle(
+        'RecordHeader',
+        parent=styles['Heading3'],
+        fontSize=14,
+        textColor=colors.HexColor('#333333'),
+        spaceAfter=12,
+        leftIndent=20
+    )
+    
+    field_style = ParagraphStyle(
+        'FieldStyle',
+        parent=styles['Normal'],
+        fontSize=11,
+        leftIndent=40,
+        spaceAfter=8
+    )
+    
+    # Adicionar título principal
+    story.append(Paragraph("Relatório de Registros - CPIndexator", title_style))
+    story.append(Spacer(1, 0.5*inch))
+    
+    # Processar registros por tipo
     for record_type, records in records_by_type.items():
         if records:
             # Título da seção
-            story.append(Paragraph(f"Registros de {record_type}", styles['Title']))
+            story.append(Paragraph(f"Registros de {record_type}", section_style))
+            story.append(Paragraph(f"Total de registros: {len(records)}", styles['Normal']))
+            story.append(Spacer(1, 0.2*inch))
             
-            # Preparar dados para tabela
-            df = pd.DataFrame(records)
-            if record_type in EXPORT_COLUMN_ORDER:
-                columns_order = [col for col in EXPORT_COLUMN_ORDER[record_type] if col in df.columns]
-                df = df[columns_order]
+            # Processar cada registro individualmente
+            for idx, record in enumerate(records, 1):
+                # Cabeçalho do registro
+                nome_principal = record.get('nome_do_registrado') or record.get('nome_do_noivo') or record.get('nome_do_falecido') or 'Sem nome'
+                header_text = f"Registro #{idx} - ID: {record.get('id', 'N/A')} - {nome_principal}"
+                story.append(Paragraph(header_text, record_header_style))
+                
+                # Criar uma tabela de duas colunas para os campos
+                data = []
+                
+                # Determinar quais campos mostrar baseado no tipo de registro
+                if record_type == "Nascimento/Batismo":
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS]
+                elif record_type == "Casamento":
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS]
+                elif record_type == "Óbito":
+                    fields_order = ['id', 'tipo_registro'] + [to_col_name(f) for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS]
+                else:
+                    fields_order = sorted(record.keys())
+                
+                # Adicionar campos à tabela
+                for field in fields_order:
+                    if field in record and record[field]:
+                        # Obter o label amigável do campo
+                        label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
+                        value = str(record[field])
+                        
+                        # Quebrar valores muito longos
+                        if len(value) > 60:
+                            value = Paragraph(value, styles['Normal'])
+                        
+                        data.append([Paragraph(f"<b>{label}:</b>", field_style), value])
+                
+                # Se não há dados, adicionar mensagem
+                if not data:
+                    data.append([Paragraph("Sem dados disponíveis", field_style), ""])
+                
+                # Criar tabela
+                table = ReportlabTable(data, colWidths=[2.5*inch, 4*inch])
+                table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
+                ]))
+                
+                story.append(table)
+                story.append(Spacer(1, 0.3*inch))
+                
+                # Adicionar linha divisória entre registros
+                if idx < len(records):
+                    story.append(Paragraph("<hr/>", styles['Normal']))
+                    story.append(Spacer(1, 0.1*inch))
             
-            # Criar tabela
-            data = [df.columns.tolist()] + df.values.tolist()
-            table = ReportlabTable(data)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            
-            story.append(table)
+            # Quebra de página após cada tipo de registro
             story.append(PageBreak())
     
+    # Construir o PDF
     doc.build(story)
     return output.getvalue()
 
@@ -365,7 +488,8 @@ def main_app():
                             st.subheader("Detalhes do Registro")
                             for key, value in record.items():
                                 if value:
-                                    st.text(f"{key}: {value}")
+                                    label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
+                                    st.text(f"{label}: {value}")
                         
                         elif st.session_state.manage_action == "edit":
                             st.info("Funcionalidade de edição em desenvolvimento.")
@@ -397,6 +521,9 @@ def main_app():
                 
                 if selected_books_export:
                     export_format = st.radio("Formato de exportação:", ["Excel", "PDF"])
+                    
+                    if export_format == "PDF":
+                        st.info("O PDF será gerado em formato de relatório detalhado, com todos os campos de cada registro apresentados de forma organizada.")
                     
                     if st.button("Gerar Arquivo para Download"):
                         try:
