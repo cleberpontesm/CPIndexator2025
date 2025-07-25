@@ -82,11 +82,10 @@ def fetch_records(search_term="", selected_books=None):
         params = {}
         conditions = []
 
-        # CORREÇÃO DEFINITIVA: Cria placeholders nomeados para cada livro na cláusula IN
-        book_placeholders = ', '.join([f':book_{i}' for i in range(len(selected_books))])
-        conditions.append(f"fonte_livro IN ({book_placeholders})")
-        for i, book in enumerate(selected_books):
-            params[f'book_{i}'] = book
+        # CORREÇÃO DEFINITIVA: Formata a lista de livros diretamente na query de forma segura.
+        # Isso evita problemas de interpretação de parâmetros pela biblioteca.
+        quoted_books = [f"'{book.replace("'", "''")}'" for book in selected_books] # Previne SQL Injection
+        conditions.append(f"fonte_livro IN ({', '.join(quoted_books)})")
 
         if search_term:
             params['like_term'] = f"%{search_term}%"
@@ -95,6 +94,7 @@ def fetch_records(search_term="", selected_books=None):
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
+        # A query agora é passada com o texto(), e os params contêm apenas o 'like_term' se existir
         df = pd.read_sql(text(final_query), conn, params=params)
 
         df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
@@ -115,7 +115,7 @@ def fetch_data_for_export(selected_books):
         result = conn.execute(query, {'books': tuple(selected_books)}).fetchall()
         return [row._asdict() for row in result]
 
-# ... (Suas funções generate_excel_bytes e generate_pdf_bytes aqui, que ainda estão como placeholders) ...
+# ... (Suas funções generate_excel_bytes e generate_pdf_bytes aqui) ...
 
 # --- INTERFACE DO APLICATIVO ---
 
