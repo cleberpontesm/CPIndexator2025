@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL COMPLETA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL CORRIGIDA - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -171,14 +171,19 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
+                            # Prepara as colunas e os valores
                             cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()]
                             vals = [record_type] + [value for value in entries.values()]
                             
-                            placeholders = ', '.join(['%s'] * len(cols))
+                            # CORREÇÃO FINAL: Usa placeholders nomeados (ex: :coluna)
+                            placeholders = ', '.join([f':{c}' for c in cols])
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             
-                            # CORREÇÃO FINAL: Passamos os valores como uma LISTA contendo uma tupla
-                            conn.execute(text(query), [tuple(vals)])
+                            # CORREÇÃO FINAL: Cria um dicionário para os parâmetros
+                            params = dict(zip(cols, vals))
+                            
+                            # Executa a query com o dicionário de parâmetros
+                            conn.execute(text(query), params)
                             conn.commit()
                             st.success("Registro adicionado com sucesso!")
                             st.rerun()
