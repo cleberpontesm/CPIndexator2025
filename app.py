@@ -94,7 +94,6 @@ def fetch_records(search_term="", selected_books=None):
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
-        # A query agora é passada com o texto(), e os params contêm apenas o 'like_term' se existir
         df = pd.read_sql(text(final_query), conn, params=params)
 
         df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
@@ -107,13 +106,6 @@ def fetch_single_record(record_id):
         query = text("SELECT * FROM registros WHERE id = :id")
         result = conn.execute(query, {'id': record_id}).fetchone()
         return result._asdict() if result else None
-
-def fetch_data_for_export(selected_books):
-    if not selected_books: return None
-    with engine.connect() as conn:
-        query = text(f"SELECT * FROM registros WHERE fonte_livro IN :books")
-        result = conn.execute(query, {'books': tuple(selected_books)}).fetchall()
-        return [row._asdict() for row in result]
 
 # ... (Suas funções generate_excel_bytes e generate_pdf_bytes aqui) ...
 
