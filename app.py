@@ -58,8 +58,12 @@ engine = init_db_connection()
 
 
 # --- FUNÇÕES DE LÓGICA DO BANCO DE DADOS E EXPORTAÇÃO ---
+
 def to_col_name(field_name):
-    return field_name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").replace("?", "")
+    # CORREÇÃO: Normaliza para remover acentos e caracteres especiais comuns
+    clean_name = field_name.lower().replace("ã", "a").replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ô", "o").replace("â", "a")
+    # Continua com a limpeza de espaços e outros caracteres
+    return clean_name.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").replace("?", "")
 
 def get_distinct_values(column_name):
     with engine.connect() as conn:
@@ -171,18 +175,14 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
-                            # Prepara as colunas e os valores
                             cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()]
                             vals = [record_type] + [value for value in entries.values()]
                             
-                            # CORREÇÃO FINAL: Usa placeholders nomeados (ex: :coluna)
                             placeholders = ', '.join([f':{c}' for c in cols])
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             
-                            # CORREÇÃO FINAL: Cria um dicionário para os parâmetros
                             params = dict(zip(cols, vals))
                             
-                            # Executa a query com o dicionário de parâmetros
                             conn.execute(text(query), params)
                             conn.commit()
                             st.success("Registro adicionado com sucesso!")
@@ -206,7 +206,6 @@ def main_app():
             st.header("Gerenciar Registro Selecionado")
             record_id_to_manage = st.number_input("Digite o ID do registro para ver detalhes, editar ou excluir:", min_value=1, step=1, value=None)
             if record_id_to_manage:
-                # Lógica para editar e excluir um registro pelo ID iria aqui
                 st.info(f"Funcionalidade de gerenciamento para o ID {record_id_to_manage} em desenvolvimento.")
 
     with tab_export:
