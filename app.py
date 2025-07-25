@@ -70,7 +70,7 @@ COLUMN_LABELS = {
     'fonte_pagina_folha': 'Fonte (Página/Folha)',
     'observacoes': 'Observações',
     'caminho_da_imagem': 'Caminho da Imagem',
-    'ultima_alteracao_por': 'Última Alteração Por' ## ADICIONADO ##
+    'ultima_alteracao_por': 'Última Alteração Por'
 }
 
 # Colunas essenciais para a visualização em tabela (índice/catálogo)
@@ -518,30 +518,41 @@ def main_app():
             del st.session_state[key]
         st.rerun()
 
-    # --- CÓDIGO DE DIAGNÓSTICO TEMPORÁRIO ---
-    st.warning(f"SESSÃO DE DEBUG (remover após resolver o problema):")
-    
-    # 1. Pega o e-mail do usuário logado
-    user_email_debug = st.session_state.user.email
-    st.write(f"E-mail do usuário logado: `{user_email_debug}`")
-    
-    # 2. Tenta pegar a lista de administradores dos Secrets
-    admin_list_debug = st.secrets.get("ADMIN_USERS", "SEGREDO 'ADMIN_USERS' NÃO ENCONTRADO!")
-    st.write(f"Lista de administradores carregada dos Secrets: `{admin_list_debug}`")
-
-    # 3. Realiza a verificação e mostra o resultado
-    if isinstance(admin_list_debug, list):
-        is_admin_debug = user_email_debug in admin_list_debug
-        st.write(f"Resultado da verificação (o usuário é admin?): `{is_admin_debug}`")
-    else:
-        st.error("O valor de 'ADMIN_USERS' não foi carregado como uma lista. Verifique o arquivo secrets.toml.")
-    st.markdown("---")
-    # --- FIM DO CÓDIGO DE DIAGNÓSTICO ---
-
     st.title("CPIndexator - Painel Principal")
+
+    # --- LÓGICA DE CONTROLE DE ACESSO PARA AS ABAS (VERSÃO CORRIGIDA) ---
     
-    ## MODIFICADO ## - Adicionada a aba de Administração
-    tab_add, tab_manage, tab_export, tab_admin = st.tabs(["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados", "⚙️ Administração"])
+    # Pega o e-mail do usuário logado de forma segura
+    user_email = ""
+    if hasattr(st.session_state, 'user') and st.session_state.user is not None:
+        user_email = st.session_state.user.email
+    
+    # Pega a lista de administradores dos secrets. Retorna uma lista vazia se não for encontrada.
+    admin_list = st.secrets.get("ADMIN_USERS", [])
+
+    # Verifica se o usuário é um administrador
+    is_admin = user_email in admin_list
+
+    # Define a lista de abas a serem criadas
+    tabs_to_create = [
+        "➕ Adicionar Registro", 
+        "🔍 Consultar e Gerenciar", 
+        "📤 Exportar Dados"
+    ]
+    if is_admin:
+        tabs_to_create.append("⚙️ Administração")
+
+    # Cria as abas
+    created_tabs = st.tabs(tabs_to_create)
+
+    # Atribui as abas a variáveis para facilitar o acesso
+    tab_add = created_tabs[0]
+    tab_manage = created_tabs[1]
+    tab_export = created_tabs[2]
+    if is_admin:
+        tab_admin = created_tabs[3]
+
+    # --- FIM DA LÓGICA DE CONTROLE DE ACESSO ---
 
     with tab_add:
         st.header("Adicionar Novo Registro")
@@ -569,9 +580,9 @@ def main_app():
                 if submitted:
                     try:
                         with engine.connect() as conn:
-                            ## MODIFICADO ## - Adiciona o usuário da alteração ao inserir
+                            # Adiciona o usuário da alteração ao inserir
                             cols = ["tipo_registro"] + [to_col_name(label) for label in entries.keys()] + ["ultima_alteracao_por"]
-                            vals = [record_type] + [value for value in entries.values()] + [st.session_state.user.email]
+                            vals = [record_type] + [value for value in entries.values()] + [user_email] # Usa user_email
                             placeholders = ', '.join([f':{c}' for c in cols])
                             query = f"INSERT INTO registros ({', '.join(cols)}) VALUES ({placeholders})"
                             params = dict(zip(cols, vals))
@@ -645,7 +656,6 @@ def main_app():
                             label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
                             st.write(f"**{label}:** {value}")
                 
-                ## MODIFICADO ## - Funcionalidade de edição ativada
                 elif action == "edit":
                     record_type = record.get('tipo_registro')
                     if not record_type:
@@ -659,7 +669,6 @@ def main_app():
                         
                         for field in fields:
                             col_name = to_col_name(field)
-                            # Pega o valor atual do registro para preencher o campo
                             current_value = record.get(col_name, "")
                             updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
@@ -667,22 +676,18 @@ def main_app():
                         if submitted:
                             try:
                                 with engine.connect() as conn:
-                                    # Monta a query de UPDATE
                                     set_clause = ", ".join([f"{col} = :{col}" for col in updated_entries.keys()])
-                                    ## MODIFICADO ## - Adiciona o usuário que alterou na query
                                     set_clause += ", ultima_alteracao_por = :user_email"
                                     
                                     query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
                                     
-                                    # Adiciona o email do usuário e o ID aos parâmetros
                                     params = updated_entries
                                     params['id'] = record_id
-                                    params['user_email'] = st.session_state.user.email
+                                    params['user_email'] = user_email # Usa user_email
                                     
                                     conn.execute(query, params)
                                     conn.commit()
                                     st.success("Registro atualizado com sucesso!")
-                                    # Limpa o estado para fechar o formulário de edição
                                     del st.session_state.manage_action
                                     st.rerun()
                             except Exception as e:
@@ -715,7 +720,6 @@ def main_app():
                 if selected_books_export:
                     export_format = st.radio("Formato de exportação:", ["Excel", "PDF"])
                     
-                    # Opções específicas para PDF
                     pdf_style = None
                     if export_format == "PDF":
                         st.subheader("Opções de PDF")
@@ -735,14 +739,12 @@ def main_app():
                     
                     if st.button("Gerar Arquivo para Download", type="primary"):
                         try:
-                            # Buscar todos os registros dos livros selecionados
                             with engine.connect() as conn:
                                 query = text("SELECT * FROM registros WHERE fonte_livro = ANY(:books) ORDER BY tipo_registro, id")
                                 result = conn.execute(query, {'books': selected_books_export})
                                 all_records = [dict(row._mapping) for row in result]
                                 
                                 if all_records:
-                                    # Organizar por tipo
                                     records_by_type = defaultdict(list)
                                     for record in all_records:
                                         records_by_type[record['tipo_registro']].append(record)
@@ -778,57 +780,58 @@ def main_app():
         else:
             st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
 
-    ## ADICIONADO ## - Nova aba para administração do banco de dados
-    with tab_admin:
-        st.header("⚙️ Administração do Banco de Dados")
-        st.markdown("---")
+    # O conteúdo da aba de administração só é processado se o usuário for admin
+    if is_admin:
+        with tab_admin:
+            st.header("⚙️ Administração do Banco de Dados")
+            st.markdown("---")
 
-        # Seção de Exportação (Backup)
-        st.subheader("Exportar Backup Completo")
-        st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV, que pode ser usado como backup.")
-        if st.button("Gerar Arquivo de Backup (CSV)"):
-            try:
-                with engine.connect() as conn:
-                    df = pd.read_sql_table('registros', conn)
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Baixar Backup CSV",
-                        data=csv,
-                        file_name="cpindexator_backup_completo.csv",
-                        mime="text/csv",
-                    )
-            except Exception as e:
-                st.error(f"Erro ao exportar o banco de dados: {e}")
+            # Seção de Exportação (Backup)
+            st.subheader("Exportar Backup Completo")
+            st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV, que pode ser usado como backup.")
+            if st.button("Gerar Arquivo de Backup (CSV)"):
+                try:
+                    with engine.connect() as conn:
+                        df = pd.read_sql_table('registros', conn)
+                        csv = df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Baixar Backup CSV",
+                            data=csv,
+                            file_name="cpindexator_backup_completo.csv",
+                            mime="text/csv",
+                        )
+                except Exception as e:
+                    st.error(f"Erro ao exportar o banco de dados: {e}")
 
-        st.markdown("---")
+            st.markdown("---")
 
-        # Seção de Importação (Restaurar)
-        st.subheader("Importar de um Backup")
-        st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados do arquivo. Use com cuidado!")
-        
-        uploaded_file = st.file_uploader("Escolha um arquivo CSV de backup", type="csv")
-        
-        if uploaded_file is not None:
-            confirm_import = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
-            if st.button("Iniciar Importação", disabled=not confirm_import):
-                if confirm_import:
-                    try:
-                        df_to_import = pd.read_csv(uploaded_file)
-                        with engine.connect() as conn:
-                            # Transação: apaga tudo e depois insere. Se a inserção falhar, o rollback é automático.
-                            with conn.begin(): 
-                                conn.execute(text("DELETE FROM registros"))
-                                df_to_import.to_sql('registros', conn, if_exists='append', index=False)
-                            
-                            st.success(f"Importação concluída com sucesso! {len(df_to_import)} registros foram importados.")
-                            st.info("A página será atualizada para refletir os novos dados.")
-                            st.rerun()
+            # Seção de Importação (Restaurar)
+            st.subheader("Importar de um Backup")
+            st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados do arquivo. Use com cuidado!")
+            
+            uploaded_file = st.file_uploader("Escolha um arquivo CSV de backup", type="csv")
+            
+            if uploaded_file is not None:
+                confirm_import = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
+                if st.button("Iniciar Importação", disabled=not confirm_import):
+                    if confirm_import:
+                        try:
+                            df_to_import = pd.read_csv(uploaded_file)
+                            with engine.connect() as conn:
+                                # Transação: apaga tudo e depois insere. Se a inserção falhar, o rollback é automático.
+                                with conn.begin(): 
+                                    conn.execute(text("DELETE FROM registros"))
+                                    df_to_import.to_sql('registros', conn, if_exists='append', index=False)
+                                
+                                st.success(f"Importação concluída com sucesso! {len(df_to_import)} registros foram importados.")
+                                st.info("A página será atualizada para refletir os novos dados.")
+                                st.rerun()
 
-                    except Exception as e:
-                        st.error(f"Erro durante a importação: {e}")
-                        st.info("A operação foi revertida. Seus dados antigos estão seguros.")
-                else:
-                    st.error("Você precisa confirmar a ação para continuar.")
+                        except Exception as e:
+                            st.error(f"Erro durante a importação: {e}")
+                            st.info("A operação foi revertida. Seus dados antigos estão seguros.")
+                    else:
+                        st.error("Você precisa confirmar a ação para continuar.")
 
 
 # --- ROTEADOR PRINCIPAL ---
