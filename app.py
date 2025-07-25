@@ -82,6 +82,8 @@ def fetch_records(search_term="", selected_books=None):
         params = {}
         conditions = []
 
+        # CORREÇÃO DEFINITIVA: Usa o estilo de parâmetro nomeado (:key) de forma consistente para TUDO.
+        # Isso garante que não haja conflitos entre as bibliotecas.
         book_placeholders = ', '.join([f':book_{i}' for i in range(len(selected_books))])
         conditions.append(f"fonte_livro IN ({book_placeholders})")
         for i, book in enumerate(selected_books):
@@ -94,20 +96,22 @@ def fetch_records(search_term="", selected_books=None):
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
-        # --- CORREÇÃO DEFINITIVA ---
-        # 1. Executa a query diretamente com SQLAlchemy
+        # CORREÇÃO DEFINITIVA: Removemos o pd.read_sql e executamos a query diretamente,
+        # depois criamos o DataFrame. Isso é mais robusto.
         result_proxy = conn.execute(text(final_query), params)
-        # 2. Pega os resultados
         results = result_proxy.fetchall()
-        # 3. Pega os nomes das colunas
         columns = result_proxy.keys()
-        # 4. Cria o DataFrame manualmente a partir dos resultados e colunas
+        
         df = pd.DataFrame(results, columns=columns)
 
-        df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
-        df['Data'] = df['data_do_evento'].fillna(df['data_do_óbito']).fillna('N/A')
-        df_display = df[['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro']].rename(columns={'id': 'ID', 'tipo_registro': 'Tipo', 'fonte_livro': 'Livro Fonte'})
-        return df_display
+        if not df.empty:
+            df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
+            df['Data'] = df['data_do_evento'].fillna(df['data_do_óbito']).fillna('N/A')
+            df_display = df[['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro']].rename(columns={'id': 'ID', 'tipo_registro': 'Tipo', 'fonte_livro': 'Livro Fonte'})
+            return df_display
+        else:
+            return pd.DataFrame(columns=['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte'])
+
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
