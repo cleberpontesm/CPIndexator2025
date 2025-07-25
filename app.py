@@ -82,10 +82,10 @@ def fetch_records(search_term="", selected_books=None):
         params = {}
         conditions = []
 
-        # CORREÇÃO DEFINITIVA: Formata a lista de livros diretamente na query de forma segura.
-        # Isso evita problemas de interpretação de parâmetros pela biblioteca.
-        quoted_books = [f"'{book.replace("'", "''")}'" for book in selected_books] # Previne SQL Injection
-        conditions.append(f"fonte_livro IN ({', '.join(quoted_books)})")
+        book_placeholders = ', '.join([f':book_{i}' for i in range(len(selected_books))])
+        conditions.append(f"fonte_livro IN ({book_placeholders})")
+        for i, book in enumerate(selected_books):
+            params[f'book_{i}'] = book
 
         if search_term:
             params['like_term'] = f"%{search_term}%"
@@ -94,7 +94,15 @@ def fetch_records(search_term="", selected_books=None):
         
         final_query = f"{base_query} WHERE {' AND '.join(conditions)} ORDER BY id"
         
-        df = pd.read_sql(text(final_query), conn, params=params)
+        # --- CORREÇÃO DEFINITIVA ---
+        # 1. Executa a query diretamente com SQLAlchemy
+        result_proxy = conn.execute(text(final_query), params)
+        # 2. Pega os resultados
+        results = result_proxy.fetchall()
+        # 3. Pega os nomes das colunas
+        columns = result_proxy.keys()
+        # 4. Cria o DataFrame manualmente a partir dos resultados e colunas
+        df = pd.DataFrame(results, columns=columns)
 
         df['Nome Principal'] = df['nome_do_registrado'].fillna(df['nome_do_noivo']).fillna(df['nome_do_falecido']).fillna('N/A')
         df['Data'] = df['data_do_evento'].fillna(df['data_do_óbito']).fillna('N/A')
