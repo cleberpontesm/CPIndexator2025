@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL COM PDF CORRIGIDO - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL COM DUPLA OPÇÃO DE PDF - CPIndexator com Supabase DB e Autenticação
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -10,7 +10,7 @@ import os
 # --- Bloco de importação de bibliotecas de exportação ---
 try:
     from openpyxl.worksheet.table import Table, TableStyleInfo
-    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib.pagesizes import A4, A3, letter, landscape
     from reportlab.platypus import SimpleDocTemplate, Table as ReportlabTable, TableStyle, Paragraph, PageBreak, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
@@ -70,6 +70,13 @@ COLUMN_LABELS = {
     'fonte_pagina_folha': 'Fonte (Página/Folha)',
     'observacoes': 'Observações',
     'caminho_da_imagem': 'Caminho da Imagem'
+}
+
+# Colunas essenciais para a visualização em tabela (índice/catálogo)
+TABLE_COLUMNS = {
+    "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'fonte_livro', 'fonte_pagina_folha'],
+    "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_evento', 'pai_do_noivo', 'mae_do_noivo', 'fonte_livro', 'fonte_pagina_folha'],
+    "Óbito": ['id', 'nome_do_falecido', 'data_do_obito', 'idade_no_obito', 'causa_mortis', 'fonte_livro', 'fonte_pagina_folha']
 }
 
 # --- CONFIGURAÇÃO INICIAL E CLIENTES ---
@@ -257,8 +264,111 @@ def generate_excel_bytes(records_by_type):
     
     return output.getvalue()
 
-def generate_pdf_bytes(records_by_type):
-    """Gera arquivo PDF com TODOS os campos dos registros organizados por tipo"""
+def generate_pdf_table(records_by_type):
+    """Gera arquivo PDF em formato de tabela (índice/catálogo)"""
+    if not EXPORT_LIBS_AVAILABLE:
+        st.error("Bibliotecas de exportação não disponíveis.")
+        return None
+    
+    output = BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=landscape(A3))
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Estilos personalizados
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1f4788'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    section_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontSize=18,
+        textColor=colors.HexColor('#2e5090'),
+        spaceAfter=20
+    )
+    
+    # Título principal
+    story.append(Paragraph("Índice de Registros - CPIndexator", title_style))
+    story.append(Spacer(1, 0.5*inch))
+    
+    for record_type, records in records_by_type.items():
+        if records:
+            # Título da seção
+            story.append(Paragraph(f"Registros de {record_type}", section_style))
+            story.append(Paragraph(f"Total: {len(records)} registros", styles['Normal']))
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Preparar dados para tabela
+            df = pd.DataFrame(records)
+            
+            # Selecionar apenas as colunas essenciais para visualização em tabela
+            if record_type in TABLE_COLUMNS:
+                columns_to_show = [col for col in TABLE_COLUMNS[record_type] if col in df.columns]
+            else:
+                # Fallback para colunas básicas
+                columns_to_show = ['id', 'tipo_registro']
+                if 'nome_do_registrado' in df.columns: columns_to_show.append('nome_do_registrado')
+                if 'nome_do_noivo' in df.columns: columns_to_show.append('nome_do_noivo')
+                if 'nome_do_falecido' in df.columns: columns_to_show.append('nome_do_falecido')
+                if 'data_do_evento' in df.columns: columns_to_show.append('data_do_evento')
+                if 'data_do_obito' in df.columns: columns_to_show.append('data_do_obito')
+                if 'fonte_livro' in df.columns: columns_to_show.append('fonte_livro')
+                if 'fonte_pagina_folha' in df.columns: columns_to_show.append('fonte_pagina_folha')
+            
+            df_filtered = df[columns_to_show]
+            
+            # Criar cabeçalhos com labels amigáveis
+            headers = [COLUMN_LABELS.get(col, col.replace('_', ' ').title()) for col in columns_to_show]
+            
+            # Preparar dados da tabela
+            data = [headers]
+            for _, row in df_filtered.iterrows():
+                row_data = []
+                for col in columns_to_show:
+                    value = str(row[col]) if pd.notna(row[col]) else ''
+                    # Limitar tamanho do texto para caber na tabela
+                    if len(value) > 50:
+                        value = value[:47] + '...'
+                    row_data.append(value)
+                data.append(row_data)
+            
+            # Criar tabela
+            table = ReportlabTable(data)
+            
+            # Estilo da tabela
+            table_style = TableStyle([
+                # Cabeçalho
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                
+                # Corpo da tabela
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ])
+            
+            table.setStyle(table_style)
+            story.append(table)
+            story.append(PageBreak())
+    
+    doc.build(story)
+    return output.getvalue()
+
+def generate_pdf_detailed(records_by_type):
+    """Gera arquivo PDF com TODOS os campos dos registros (relatório detalhado)"""
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
         return None
@@ -305,7 +415,7 @@ def generate_pdf_bytes(records_by_type):
     )
     
     # Adicionar título principal
-    story.append(Paragraph("Relatório de Registros - CPIndexator", title_style))
+    story.append(Paragraph("Relatório Detalhado de Registros - CPIndexator", title_style))
     story.append(Spacer(1, 0.5*inch))
     
     # Processar registros por tipo
@@ -522,10 +632,25 @@ def main_app():
                 if selected_books_export:
                     export_format = st.radio("Formato de exportação:", ["Excel", "PDF"])
                     
+                    # Opções específicas para PDF
+                    pdf_style = None
                     if export_format == "PDF":
-                        st.info("O PDF será gerado em formato de relatório detalhado, com todos os campos de cada registro apresentados de forma organizada.")
+                        st.subheader("Opções de PDF")
+                        pdf_style = st.radio(
+                            "Estilo do PDF:",
+                            ["Tabela (Índice/Catálogo)", "Relatório Detalhado"],
+                            help="**Tabela**: Visão geral compacta com campos principais\n\n**Relatório Detalhado**: Todos os campos de cada registro"
+                        )
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if pdf_style == "Tabela (Índice/Catálogo)":
+                                st.info("📊 **Formato Tabela**\n\nIdeal para ter uma visão geral dos registros, como um índice ou catálogo. Mostra apenas os campos essenciais em formato compacto.")
+                        with col2:
+                            if pdf_style == "Relatório Detalhado":
+                                st.info("📋 **Formato Detalhado**\n\nExibe todos os campos de cada registro. Ideal para análise completa ou impressão de fichas individuais.")
                     
-                    if st.button("Gerar Arquivo para Download"):
+                    if st.button("Gerar Arquivo para Download", type="primary"):
                         try:
                             # Buscar todos os registros dos livros selecionados
                             with engine.connect() as conn:
@@ -549,12 +674,18 @@ def main_app():
                                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                             )
                                     else:  # PDF
-                                        file_bytes = generate_pdf_bytes(dict(records_by_type))
+                                        if pdf_style == "Tabela (Índice/Catálogo)":
+                                            file_bytes = generate_pdf_table(dict(records_by_type))
+                                            filename = "cpindexator_indice.pdf"
+                                        else:
+                                            file_bytes = generate_pdf_detailed(dict(records_by_type))
+                                            filename = "cpindexator_relatorio_detalhado.pdf"
+                                        
                                         if file_bytes:
                                             st.download_button(
                                                 label="📥 Baixar PDF",
                                                 data=file_bytes,
-                                                file_name="cpindexator_export.pdf",
+                                                file_name=filename,
                                                 mime="application/pdf"
                                             )
                                 else:
