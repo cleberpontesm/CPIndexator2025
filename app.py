@@ -457,7 +457,7 @@ def main_app():
 
         col1, col2 = st.columns(2)
         with col1:
-            book_preset = st.selectbox("Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
+            book_preset = st.selectbox("[Usar após a primeira adição] Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
         with col2:
             location_preset = st.selectbox("Preencher 'Local' com:", [""] + all_locations, key="location_preset_add")
 
