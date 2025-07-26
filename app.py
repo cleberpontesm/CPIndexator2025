@@ -175,8 +175,9 @@ def formatar_email_para_exibicao(email):
 
 def formatar_timestamp_para_exibicao(ts):
     """Converte um timestamp UTC para o fuso de Brasília e o formata."""
-    if not ts:
+    if not ts or pd.isna(ts):  # Verifica se é None, NaT ou NaN
         return "N/D"  # Não Disponível
+    
     try:
         brasilia_tz = ZoneInfo("America/Sao_Paulo")
         # Garante que o timestamp de entrada é ciente do fuso (UTC)
@@ -185,7 +186,7 @@ def formatar_timestamp_para_exibicao(ts):
             
         local_time = ts.astimezone(brasilia_tz)
         return local_time.strftime('%d/%m/%Y %H:%M:%S')
-    except (AttributeError, TypeError):
+    except (AttributeError, TypeError, ValueError):
         # Fallback caso o dado não seja um timestamp válido
         return str(ts)
 
