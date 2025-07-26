@@ -21,16 +21,14 @@ except ImportError:
     EXPORT_LIBS_AVAILABLE = False
 
 # --- Definições e constantes (do seu código original) ---
-## MODIFICADO ## - Adicionada a categoria "Notas"
 FORM_DEFINITIONS = {
     "Nascimento/Batismo": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Registrado", "Nome do Pai", "Nome da Mãe", "Padrinhos", "Avô paterno", "Avó paterna", "Avô materno", "Avó materna"],
     "Casamento": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Noivo", "Idade do Noivo", "Pai do Noivo", "Mãe do Noivo", "Nome da Noiva", "Idade da Noiva", "Pai da Noiva", "Mãe da Noiva", "Testemunhas"],
     "Óbito": ["Data do Registro", "Data do Óbito", "Local do Óbito", "Nome do Falecido", "Idade no Óbito", "Filiação", "Cônjuge Sobrevivente", "Deixou Filhos?", "Causa Mortis", "Local do Sepultamento"],
-    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Resumo do Teor"] # Campos estáticos. Partes Envolvidas serão dinâmicas.
+    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Resumo do Teor"]
 }
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
 
-## MODIFICADO ## - Adicionada a ordem de colunas para "Notas"
 EXPORT_COLUMN_ORDER = {
     "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
     "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
@@ -38,8 +36,6 @@ EXPORT_COLUMN_ORDER = {
     "Notas": ["id", "tipo_registro", "tipo_de_ato", "data_do_registro", "local_do_registro", "partes_envolvidas", "resumo_do_teor", "fonte_livro", "fonte_pagina_folha", "observacoes", 'criado_por', 'ultima_alteracao_por']
 }
 
-# Mapeamento de nomes de colunas para labels amigáveis
-## MODIFICADO ## - Adicionados os labels para os novos campos de "Notas"
 COLUMN_LABELS = {
     'id': 'ID',
     'tipo_registro': 'Tipo de Registro',
@@ -78,15 +74,12 @@ COLUMN_LABELS = {
     'caminho_da_imagem': 'Caminho da Imagem',
     'criado_por': 'Criado Por',
     'ultima_alteracao_por': 'Última Alteração Por',
-    # ADICIONADOS
     'tipo_de_ato': 'Tipo de Ato',
     'local_do_registro': 'Local do Registro',
     'partes_envolvidas': 'Partes Envolvidas',
     'resumo_do_teor': 'Resumo do Teor'
 }
 
-# Colunas essenciais para a visualização em tabela (índice/catálogo)
-## MODIFICADO ## - Adicionadas colunas para "Notas"
 TABLE_COLUMNS = {
     "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_registro', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'fonte_livro', 'fonte_pagina_folha'],
     "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_registro', 'data_do_evento', 'pai_do_noivo', 'mae_do_noivo', 'fonte_livro', 'fonte_pagina_folha'],
@@ -94,7 +87,6 @@ TABLE_COLUMNS = {
     "Notas": ['id', 'tipo_de_ato', 'data_do_registro', 'partes_envolvidas', 'resumo_do_teor', 'fonte_livro', 'fonte_pagina_folha']
 }
 
-# Categorias de campos para busca avançada
 SEARCH_CATEGORIES = {
     "Nomes": [
         'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'nome_do_noivo', 'nome_da_noiva', 
@@ -171,7 +163,14 @@ def get_table_columns():
         result = conn.execute(query).fetchall()
         return [row[0] for row in result]
 
-## MODIFICADO ## - Função fetch_records com busca avançada por categorias
+# --- NOVA FUNÇÃO AUXILIAR ---
+def formatar_email_para_exibicao(email):
+    """Remove a parte do domínio de uma string de e-mail para exibição."""
+    if email and '@' in email:
+        return email.split('@')[0]
+    return email # Retorna o valor original se não for um e-mail ou for Nulo
+# -----------------------------
+
 def fetch_records(search_term="", selected_books=None, search_categories=None):
     new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Alterado Por']
     if not selected_books:
@@ -183,26 +182,19 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
             params = {'books': selected_books}
 
             if search_term:
-                # Determina quais campos buscar baseado nas categorias selecionadas
                 if search_categories and len(search_categories) > 0:
-                    # Busca apenas nas categorias selecionadas
                     search_fields = []
                     for category in search_categories:
                         if category in SEARCH_CATEGORIES:
                             search_fields.extend(SEARCH_CATEGORIES[category])
-                    # Remove duplicatas
                     search_fields = list(set(search_fields))
                 else:
-                    # Busca em todos os campos se nenhuma categoria for selecionada
                     search_fields = []
                     for fields_list in SEARCH_CATEGORIES.values():
                         search_fields.extend(fields_list)
-                    # Adiciona também outros campos que podem não estar nas categorias
                     search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por'])
-                    # Remove duplicatas
                     search_fields = list(set(search_fields))
 
-                # Constrói a lógica de busca dinamicamente
                 search_conditions = []
                 for field in search_fields:
                     if field == 'id':
@@ -232,7 +224,6 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     df.loc[df['tipo_registro'] == 'Casamento', 'Nome Principal'] = df['nome_do_noivo']
                 if 'nome_do_falecido' in df.columns:
                     df.loc[df['tipo_registro'] == 'Óbito', 'Nome Principal'] = df['nome_do_falecido']
-                ## ADICIONADO: Define o "Nome Principal" para Notas como a primeira parte envolvida
                 if 'partes_envolvidas' in df.columns:
                     df.loc[df['tipo_registro'] == 'Notas', 'Nome Principal'] = df['partes_envolvidas'].str.split(';').str[0].fillna('N/A')
 
@@ -241,7 +232,6 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     df.loc[df['data_do_evento'].notna(), 'Data'] = df['data_do_evento']
                 if 'data_do_obito' in df.columns:
                     df.loc[df['data_do_obito'].notna(), 'Data'] = df['data_do_obito']
-                ## ADICIONADO: Define a data para Notas
                 if 'data_do_registro' in df.columns:
                     df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
 
@@ -254,7 +244,14 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     'ultima_alteracao_por': 'Alterado Por'
                 }
                 
-                # Garante que as colunas existem antes de tentar usá-las
+                # --- ALTERAÇÃO 2 ---
+                # Formata os emails para exibição na tabela principal
+                if 'criado_por' in df.columns:
+                    df['criado_por'] = df['criado_por'].apply(formatar_email_para_exibicao)
+                if 'ultima_alteracao_por' in df.columns:
+                    df['ultima_alteracao_por'] = df['ultima_alteracao_por'].apply(formatar_email_para_exibicao)
+                # ---------------------
+
                 final_cols = [col for col in columns_to_show if col in df.columns]
                 return df[final_cols].rename(columns=rename_dict)
             else:
@@ -271,11 +268,6 @@ def fetch_single_record(record_id):
         result = conn.execute(query, {'id': record_id}).fetchone()
         return result._asdict() if result else None
 
-# --- Funções de exportação (generate_excel_bytes, generate_pdf_table, generate_pdf_detailed) ---
-# Essas funções foram ajustadas para lidar com a nova categoria "Notas" dinamicamente
-# Não há necessidade de grandes alterações aqui, pois elas se baseiam nos dicionários que já modificamos.
-# Apenas uma pequena modificação no PDF Detalhado para formatar melhor as "Partes Envolvidas"
-
 def generate_excel_bytes(records_by_type):
     if not EXPORT_LIBS_AVAILABLE:
         st.error("Bibliotecas de exportação não disponíveis.")
@@ -285,7 +277,6 @@ def generate_excel_bytes(records_by_type):
         for record_type, records in records_by_type.items():
             if records:
                 df = pd.DataFrame(records)
-                # MODIFICADO: Garante que a ordem de exportação exista para o tipo de registro
                 if record_type in EXPORT_COLUMN_ORDER:
                     columns_order = [col for col in EXPORT_COLUMN_ORDER[record_type] if col in df.columns]
                     df = df[columns_order]
@@ -293,7 +284,6 @@ def generate_excel_bytes(records_by_type):
                 sheet_name = record_type.replace("/", "-")[:31]
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
                 worksheet = writer.sheets[sheet_name]
-                # (O resto da função de formatação do Excel permanece o mesmo)
                 for column in worksheet.columns:
                     max_length = 0
                     column = [cell for cell in column]
@@ -306,7 +296,6 @@ def generate_excel_bytes(records_by_type):
     return output.getvalue()
 
 def generate_pdf_table(records_by_type):
-    # (Esta função geralmente funcionará sem alterações, pois se baseia em TABLE_COLUMNS)
     if not EXPORT_LIBS_AVAILABLE: st.error("Bibliotecas de exportação não disponíveis."); return None
     output = BytesIO(); doc = SimpleDocTemplate(output, pagesize=landscape(A3)); story = []; styles = getSampleStyleSheet()
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#1f4788'), spaceAfter=30, alignment=TA_CENTER)
@@ -318,7 +307,7 @@ def generate_pdf_table(records_by_type):
             df = pd.DataFrame(records)
             if record_type in TABLE_COLUMNS:
                 columns_to_show = [col for col in TABLE_COLUMNS[record_type] if col in df.columns]
-            else: # Fallback genérico
+            else:
                 columns_to_show = [col for col in df.columns if col not in ['criado_por', 'ultima_alteracao_por', 'caminho_da_imagem']]
             df_filtered = df[columns_to_show]
             headers = [COLUMN_LABELS.get(col, col.replace('_', ' ').title()) for col in columns_to_show]
@@ -328,7 +317,6 @@ def generate_pdf_table(records_by_type):
                 for col in columns_to_show:
                     value = str(row[col]) if pd.notna(row[col]) else ''
                     if len(value) > 50: value = value[:47] + '...'
-                    # MODIFICADO: formata a lista de partes para exibição na tabela
                     if col == 'partes_envolvidas': value = value.replace(';', ', ')
                     row_data.append(value)
                 data.append(row_data)
@@ -368,7 +356,6 @@ def generate_pdf_detailed(records_by_type):
                     if field in record and pd.notna(record[field]) and record[field] != '':
                         label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
                         value = str(record[field])
-                        # MODIFICADO: Formata as partes envolvidas com quebra de linha no PDF
                         if field == 'partes_envolvidas':
                             value = value.replace(';', '<br/>- ')
                             value = f"- {value}"
@@ -408,9 +395,11 @@ def login_form():
 
 def main_app():
     st.sidebar.title("Bem-vindo(a)!")
-    st.sidebar.info(f"Logado como: {st.session_state.user.email}")
+    # --- ALTERAÇÃO 1 ---
+    # Formata o e-mail do usuário logado para exibição
+    st.sidebar.info(f"Logado como: {formatar_email_para_exibicao(st.session_state.user.email)}")
+    # -------------------
     if st.sidebar.button("Sair (Logout)"):
-        # Limpa todo o session_state ao sair
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
@@ -433,7 +422,6 @@ def main_app():
     with tab_add:
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
-        # Local do evento e local do registro são combinados para o preset
         all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
 
         col1, col2 = st.columns(2)
@@ -444,17 +432,15 @@ def main_app():
 
         record_type = st.selectbox("Tipo de Registro:", list(FORM_DEFINITIONS.keys()), index=None, placeholder="Selecione...")
 
-        ## ADICIONADO: Lógica para resetar o número de partes ao trocar de tipo de registro
         if 'current_record_type' not in st.session_state or st.session_state.current_record_type != record_type:
             st.session_state.current_record_type = record_type
             if 'num_partes' in st.session_state:
                 del st.session_state.num_partes
 
         if record_type:
-            # Primeiro, os botões de controle dinâmico (fora do formulário)
             if record_type == "Notas":
                 if 'num_partes' not in st.session_state:
-                    st.session_state.num_partes = 2  # Começa com 2 campos
+                    st.session_state.num_partes = 2
                 
                 st.markdown("### Controle de Partes Envolvidas")
                 col_btn1, col_btn2 = st.columns(2)
@@ -469,10 +455,8 @@ def main_app():
                 
                 st.markdown("---")
 
-            # Agora o formulário principal
             with st.form("new_record_form", clear_on_submit=True):
                 entries = {}
-                # Campos normais
                 fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
                 for field in fields:
                     default_value = ""
@@ -482,7 +466,6 @@ def main_app():
                         default_value = location_preset
                     entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
-                # Campos dinâmicos para "Notas"
                 partes_envolvidas_inputs = []
                 if record_type == "Notas":
                     st.markdown("---")
@@ -490,13 +473,10 @@ def main_app():
                     for i in range(st.session_state.get('num_partes', 2)):
                         partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
 
-                # Botão de submissão
                 submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
                 
                 if submitted:
-                    # Coleta os dados das partes e junta em uma string
                     if record_type == "Notas" and partes_envolvidas_inputs:
-                        # Filtra partes vazias antes de juntar
                         partes_values = [p.strip() for p in partes_envolvidas_inputs if p.strip()]
                         entries['partes_envolvidas'] = "; ".join(partes_values)
 
@@ -505,7 +485,6 @@ def main_app():
                             cols = ["tipo_registro"] + list(entries.keys()) + ["criado_por", "ultima_alteracao_por"]
                             vals = [record_type] + list(entries.values()) + [user_email, user_email]
 
-                            # Remove chaves duplicadas, se houver
                             final_cols = []
                             final_vals = []
                             seen_cols = set()
@@ -522,7 +501,6 @@ def main_app():
                             conn.execute(text(query), params)
                             conn.commit()
                             st.success("Registro adicionado com sucesso!")
-                            # Limpa o contador de partes após o sucesso
                             if 'num_partes' in st.session_state:
                                 del st.session_state.num_partes
                             st.rerun()
@@ -538,14 +516,12 @@ def main_app():
             st.warning("Nenhum livro encontrado no banco de dados. Adicione registros primeiro.")
             selected_books_manage = []
         else:
-            # Botão para selecionar todos os livros
             col_select_all, _ = st.sidebar.columns([1, 3])
             with col_select_all:
                 if st.button("Selecionar Todos", key="select_all_books", use_container_width=True):
                     st.session_state.manage_books_select = all_books_manage
                     st.rerun()
                 
-                # ESTILO MODIFICADO: Diminui o tamanho da fonte do botão para 10px
                 st.markdown("""
                 <style>
                     div[data-testid="stHorizontalBlock"] > div:first-child button {
@@ -562,24 +538,19 @@ def main_app():
                 key="manage_books_select"
             )
 
-        # Filtros de busca avançada
         st.sidebar.subheader("🔍 Busca Avançada")
         search_term = st.sidebar.text_input("Termo de Busca:", help="Digite qualquer palavra ou frase que deseja encontrar")
         
-        # Seletor de categorias
         search_categories = st.sidebar.multiselect(
             "Buscar nas Categorias:",
             options=list(SEARCH_CATEGORIES.keys()),
-            default=[],  # Nenhuma categoria selecionada = busca em todas
+            default=[],
             help="Selecione em quais tipos de informação buscar. Se nenhuma categoria for selecionada, a busca será feita em todos os campos.",
             key="search_categories_select"
         )
         
-        # Explicação do sistema de busca
         if search_categories:
             st.sidebar.info(f"🎯 Buscando apenas em: {', '.join(search_categories)}")
-            
-            # Mostra quais campos estão incluídos nas categorias selecionadas
             with st.sidebar.expander("Ver campos incluídos"):
                 for category in search_categories:
                     if category in SEARCH_CATEGORIES:
@@ -588,7 +559,6 @@ def main_app():
         else:
             st.sidebar.info("🌐 Buscando em todos os campos disponíveis")
 
-        # Seção de ajuda sobre busca
         with st.sidebar.expander("ℹ️ Como usar a Busca Avançada"):
             st.markdown("""
             **Busca por Termo:**
@@ -613,13 +583,11 @@ def main_app():
         if not selected_books_manage:
             st.warning("Por favor, selecione ao menos um livro no filtro.")
         else:
-            # Chama a função com os novos parâmetros
             import time
             start_time = time.time()
             df_records = fetch_records(search_term, selected_books_manage, search_categories)
             search_time = time.time() - start_time
             
-            # Mostra informações sobre os resultados
             if not df_records.empty:
                 total_results = len(df_records)
                 if search_term:
@@ -630,7 +598,6 @@ def main_app():
                 else:
                     st.info(f"📊 Exibindo **{total_results}** registros dos livros selecionados ⏱️ ({search_time:.2f}s)")
                 
-                # Estatísticas por tipo de registro
                 if 'Tipo' in df_records.columns:
                     tipo_counts = df_records['Tipo'].value_counts()
                     stats_text = " | ".join([f"{tipo}: {count}" for tipo, count in tipo_counts.items()])
@@ -646,17 +613,12 @@ def main_app():
             
             st.dataframe(df_records, use_container_width=True, hide_index=True)
 
-            # Botão para limpar filtros de busca
             if search_term or search_categories:
                 st.sidebar.markdown("---")
                 if st.sidebar.button("🗑️ Limpar Filtros de Busca"):
                     st.session_state.search_categories_select = []
                     st.rerun()
 
-            # ------------------- ORDEM ALTERADA -------------------
-            # Bloco "Gerenciar Registro" agora vem PRIMEIRO.
-            
-            # Gerenciamento de registro individual
             st.markdown("---")
             st.header("Gerenciar Registro Selecionado")
             record_id_to_manage = st.number_input(
@@ -704,14 +666,20 @@ def main_app():
                 st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
                 st.markdown("---")
 
+                # --- ALTERAÇÃO 3 ---
                 if action == "view":
-                    # Lógica de visualização permanece similar, mas formatando partes_envolvidas
                     for key, value in record.items():
                         if value:
                             label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
-                            if key == 'partes_envolvidas':
-                                value = str(value).replace(';', ' | ')
-                            st.write(f"**{label}:** {value}")
+                            display_value = value
+
+                            if key in ['criado_por', 'ultima_alteracao_por']:
+                                display_value = formatar_email_para_exibicao(value)
+                            elif key == 'partes_envolvidas':
+                                display_value = str(value).replace(';', ' | ')
+                            
+                            st.write(f"**{label}:** {display_value}")
+                # ---------------------
 
                 elif action == "edit":
                     record_type = record.get('tipo_registro')
@@ -719,7 +687,6 @@ def main_app():
                         st.error("Tipo de registro não definido. Não é possível editar.")
                         return
 
-                    # Controles dinâmicos para edição (fora do formulário)
                     if record_type == "Notas":
                         partes_str = record.get('partes_envolvidas', '')
                         partes_list = partes_str.split('; ') if partes_str else []
@@ -750,7 +717,6 @@ def main_app():
                             current_value = record.get(col_name, "")
                             updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
-                        # Lógica de edição para campos dinâmicos de "Notas"
                         edit_partes_inputs = []
                         if record_type == "Notas":
                             st.markdown("---")
@@ -801,25 +767,21 @@ def main_app():
                         except Exception as e: 
                             st.error(f"Erro ao excluir: {e}")
 
-            # Ferramenta para excluir múltiplos registros
             st.markdown("---")
             st.subheader("Excluir Múltiplos Registros")
             st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
             
-            # Campo para inserir IDs separados por vírgula
             ids_to_delete = st.text_input(
                 "IDs para excluir (separados por vírgula):",
                 help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
             )
             
-            # Botão de confirmação
-            if st.button("Excluir Múltiplos", type="primary", key="delete_multiple_btn"):
+            if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
                 if not ids_to_delete:
                     st.error("Por favor, insira pelo menos um ID para excluir.")
                 else:
                     try:
-                        # Parse dos IDs
-                        id_list = [int(id.strip()) for id in ids_to_delete.split(",") if id.strip().isdigit()]
+                        id_list = [int(id_val.strip()) for id_val in ids_to_delete.split(",") if id_val.strip().isdigit()]
                         
                         if not id_list:
                             st.error("Nenhum ID válido encontrado.")
@@ -830,18 +792,15 @@ def main_app():
                             if confirm:
                                 try:
                                     with engine.connect() as conn:
-                                        # Cria uma lista de parâmetros para a query
-                                        params = [{"id": id_val} for id_val in id_list]
+                                        params = [{"id_val": id_val} for id_val in id_list]
                                         
-                                        # Executa a exclusão em lote
                                         result = conn.execute(
-                                            text("DELETE FROM registros WHERE id = :id"),
+                                            text("DELETE FROM registros WHERE id = :id_val"),
                                             params
                                         )
                                         conn.commit()
                                         
                                         st.success(f"{result.rowcount} registros excluídos com sucesso!")
-                                        # Força recarregar os dados
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro durante a exclusão: {e}")
@@ -851,7 +810,6 @@ def main_app():
                         st.error(f"Erro ao processar IDs: {e}")
             
     with tab_export:
-        # A aba de exportação não precisa de grandes mudanças, pois se baseia nos dicionários já atualizados
         st.header("Exportar Dados")
         if EXPORT_LIBS_AVAILABLE:
             all_books_export = get_distinct_values("fonte_livro")
@@ -897,7 +855,6 @@ def main_app():
 
     if is_admin:
         with tab_admin:
-            # A aba de admin permanece a mesma
             st.header("⚙️ Administração do Banco de Dados")
             st.markdown("---")
             st.subheader("Exportar Backup Completo")
