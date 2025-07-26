@@ -550,7 +550,7 @@ def main_app():
                 st.markdown("""
                 <style>
                     div[data-testid="stHorizontalBlock"] > div:first-child button {
-                        font-size: 14px !important;
+                        font-size: 10px !important;
                         padding: 0.25em 0.5em !important;
                     }
                 </style>
