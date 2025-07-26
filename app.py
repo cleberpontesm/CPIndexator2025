@@ -412,38 +412,50 @@ def main_app():
                 del st.session_state.num_partes
 
         if record_type:
+            # Primeiro, os botões de controle dinâmico (fora do formulário)
+            if record_type == "Notas":
+                if 'num_partes' not in st.session_state:
+                    st.session_state.num_partes = 2  # Começa com 2 campos
+                
+                st.markdown("### Controle de Partes Envolvidas")
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("➕ Adicionar Parte Envolvida"):
+                        st.session_state.num_partes += 1
+                        st.rerun()
+                with col_btn2:
+                    if st.button("➖ Remover Última Parte") and st.session_state.num_partes > 1:
+                        st.session_state.num_partes -= 1
+                        st.rerun()
+                
+                st.markdown("---")
+
+            # Agora o formulário principal
             with st.form("new_record_form", clear_on_submit=True):
                 entries = {}
                 # Campos normais
                 fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
                 for field in fields:
                     default_value = ""
-                    if field == "Fonte (Livro)" and book_preset: default_value = book_preset
-                    elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: default_value = location_preset
+                    if field == "Fonte (Livro)" and book_preset: 
+                        default_value = book_preset
+                    elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
+                        default_value = location_preset
                     entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
-                # ## ADICIONADO: Lógica para campos dinâmicos de "Notas"
+                # Campos dinâmicos para "Notas"
                 partes_envolvidas_inputs = []
                 if record_type == "Notas":
                     st.markdown("---")
                     st.subheader("Partes Envolvidas")
-                    if 'num_partes' not in st.session_state:
-                        st.session_state.num_partes = 2 # Começa com 2 campos
+                    for i in range(st.session_state.get('num_partes', 2)):
+                        partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
 
-                    for i in range(st.session_state.num_partes):
-                        partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"parte_{i}"))
-
-                    # O botão de adicionar precisa ficar fora do form para não submetê-lo
-            if record_type == "Notas":
-                if st.button("➕ Adicionar mais uma Parte Envolvida"):
-                    st.session_state.num_partes += 1
-                    st.rerun()
-
-            # O botão de submissão volta para dentro do contexto do form
-            with st.form("new_record_form", clear_on_submit=True):
+                # Botão de submissão
                 submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
+                
                 if submitted:
-                    # ## MODIFICADO: Coleta os dados das partes e junta em uma string
+                    # Coleta os dados das partes e junta em uma string
                     if record_type == "Notas" and partes_envolvidas_inputs:
                         # Filtra partes vazias antes de juntar
                         partes_values = [p.strip() for p in partes_envolvidas_inputs if p.strip()]
@@ -503,30 +515,42 @@ def main_app():
             if record_id_to_manage:
                 if 'record_id' not in st.session_state or st.session_state.record_id != record_id_to_manage:
                     st.session_state.record_id = record_id_to_manage
-                    if 'manage_action' in st.session_state: del st.session_state.manage_action
-                    if 'edit_num_partes' in st.session_state: del st.session_state.edit_num_partes
-
+                    if 'manage_action' in st.session_state: 
+                        del st.session_state.manage_action
+                    if 'edit_num_partes' in st.session_state: 
+                        del st.session_state.edit_num_partes
 
                 record = fetch_single_record(record_id_to_manage)
                 if record:
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        if st.button("📋 Ver Detalhes", use_container_width=True): st.session_state.manage_action = "view"; st.rerun()
+                        if st.button("📋 Ver Detalhes", use_container_width=True): 
+                            st.session_state.manage_action = "view"
+                            st.rerun()
                     with col2:
-                        if st.button("✏️ Editar", use_container_width=True): st.session_state.manage_action = "edit"; st.rerun()
+                        if st.button("✏️ Editar", use_container_width=True): 
+                            st.session_state.manage_action = "edit"
+                            st.rerun()
                     with col3:
-                        if st.button("🗑️ Excluir", use_container_width=True): st.session_state.manage_action = "delete"; st.rerun()
-                else: st.error(f"Registro ID {record_id_to_manage} não encontrado.")
+                        if st.button("🗑️ Excluir", use_container_width=True): 
+                            st.session_state.manage_action = "delete"
+                            st.rerun()
+                else: 
+                    st.error(f"Registro ID {record_id_to_manage} não encontrado.")
 
             if 'manage_action' in st.session_state and 'record_id' in st.session_state and st.session_state.record_id:
-                record_id = st.session_state.record_id; record = fetch_single_record(record_id)
-                if not record: st.error(f"Registro ID {record_id} não encontrado. Pode ter sido excluído."); return
+                record_id = st.session_state.record_id
+                record = fetch_single_record(record_id)
+                if not record: 
+                    st.error(f"Registro ID {record_id} não encontrado. Pode ter sido excluído.")
+                    return
 
                 action = st.session_state.manage_action
-                st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}"); st.markdown("---")
+                st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
+                st.markdown("---")
 
                 if action == "view":
-                    # (Lógica de visualização permanece similar, mas formatando partes_envolvidas)
+                    # Lógica de visualização permanece similar, mas formatando partes_envolvidas
                     for key, value in record.items():
                         if value:
                             label = COLUMN_LABELS.get(key, key.replace('_', ' ').title())
@@ -536,7 +560,30 @@ def main_app():
 
                 elif action == "edit":
                     record_type = record.get('tipo_registro')
-                    if not record_type: st.error("Tipo de registro não definido. Não é possível editar."); return
+                    if not record_type: 
+                        st.error("Tipo de registro não definido. Não é possível editar.")
+                        return
+
+                    # Controles dinâmicos para edição (fora do formulário)
+                    if record_type == "Notas":
+                        partes_str = record.get('partes_envolvidas', '')
+                        partes_list = partes_str.split('; ') if partes_str else []
+
+                        if 'edit_num_partes' not in st.session_state:
+                            st.session_state.edit_num_partes = max(1, len(partes_list))
+
+                        st.markdown("### Controle de Partes Envolvidas")
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            if st.button("➕ Adicionar Parte na Edição"):
+                                st.session_state.edit_num_partes += 1
+                                st.rerun()
+                        with col_btn2:
+                            if st.button("➖ Remover Última Parte na Edição") and st.session_state.edit_num_partes > 1:
+                                st.session_state.edit_num_partes -= 1
+                                st.rerun()
+                        
+                        st.markdown("---")
 
                     with st.form("edit_record_form"):
                         st.info(f"Editando registro de {record_type}")
@@ -548,21 +595,20 @@ def main_app():
                             current_value = record.get(col_name, "")
                             updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
-                        # ## ADICIONADO: Lógica de edição para campos dinâmicos de "Notas"
+                        # Lógica de edição para campos dinâmicos de "Notas"
                         edit_partes_inputs = []
                         if record_type == "Notas":
-                            st.markdown("---"); st.subheader("Partes Envolvidas")
+                            st.markdown("---")
+                            st.subheader("Partes Envolvidas")
                             partes_str = record.get('partes_envolvidas', '')
                             partes_list = partes_str.split('; ') if partes_str else []
 
-                            if 'edit_num_partes' not in st.session_state:
-                                st.session_state.edit_num_partes = max(1, len(partes_list))
-
-                            for i in range(st.session_state.edit_num_partes):
+                            for i in range(st.session_state.get('edit_num_partes', 1)):
                                 val = partes_list[i] if i < len(partes_list) else ""
                                 edit_partes_inputs.append(st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}"))
 
                         submitted = st.form_submit_button("Salvar Alterações")
+                        
                         if submitted:
                             if record_type == "Notas":
                                 partes_values = [p.strip() for p in edit_partes_inputs if p.strip()]
@@ -574,36 +620,39 @@ def main_app():
                                     set_clause += ", ultima_alteracao_por = :user_email"
                                     query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
                                     params = updated_entries
-                                    params['id'] = record_id; params['user_email'] = user_email
-                                    conn.execute(query, params); conn.commit()
+                                    params['id'] = record_id
+                                    params['user_email'] = user_email
+                                    conn.execute(query, params)
+                                    conn.commit()
                                     st.success("Registro atualizado com sucesso!")
                                     del st.session_state.manage_action
-                                    if 'edit_num_partes' in st.session_state: del st.session_state.edit_num_partes
+                                    if 'edit_num_partes' in st.session_state: 
+                                        del st.session_state.edit_num_partes
                                     st.rerun()
-                            except Exception as e: st.error(f"Ocorreu um erro ao atualizar: {e}")
-
-                    if record_type == "Notas":
-                        if st.button("➕ Adicionar Parte na Edição"):
-                            st.session_state.edit_num_partes += 1
-                            st.rerun()
+                            except Exception as e: 
+                                st.error(f"Ocorreu um erro ao atualizar: {e}")
 
                 elif action == "delete":
                     st.warning(f"Tem certeza que deseja excluir o registro ID {record_id}?")
                     if st.button("Confirmar Exclusão", type="primary"):
                         try:
                             with engine.connect() as conn:
-                                conn.execute(text("DELETE FROM registros WHERE id = :id"), {'id': record_id}); conn.commit()
+                                conn.execute(text("DELETE FROM registros WHERE id = :id"), {'id': record_id})
+                                conn.commit()
                                 st.success("Registro excluído com sucesso!")
-                                del st.session_state.manage_action; del st.session_state.record_id
+                                del st.session_state.manage_action
+                                del st.session_state.record_id
                                 st.rerun()
-                        except Exception as e: st.error(f"Erro ao excluir: {e}")
+                        except Exception as e: 
+                            st.error(f"Erro ao excluir: {e}")
 
     with tab_export:
-        # (A aba de exportação não precisa de grandes mudanças, pois se baseia nos dicionários já atualizados)
+        # A aba de exportação não precisa de grandes mudanças, pois se baseia nos dicionários já atualizados
         st.header("Exportar Dados")
         if EXPORT_LIBS_AVAILABLE:
             all_books_export = get_distinct_values("fonte_livro")
-            if not all_books_export: st.warning("Nenhum registro encontrado para exportar.")
+            if not all_books_export: 
+                st.warning("Nenhum registro encontrado para exportar.")
             else:
                 selected_books_export = st.multiselect("Selecione os livros para exportar:", all_books_export, default=all_books_export)
                 if selected_books_export:
@@ -620,33 +669,43 @@ def main_app():
                                 all_records = [dict(row._mapping) for row in result]
                                 if all_records:
                                     records_by_type = defaultdict(list)
-                                    for record in all_records: records_by_type[record['tipo_registro']].append(record)
+                                    for record in all_records: 
+                                        records_by_type[record['tipo_registro']].append(record)
                                     if export_format == "Excel":
                                         file_bytes = generate_excel_bytes(dict(records_by_type))
-                                        if file_bytes: st.download_button("📥 Baixar Excel", file_bytes, "cpindexator_export.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                                        if file_bytes: 
+                                            st.download_button("📥 Baixar Excel", file_bytes, "cpindexator_export.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                                     else:
                                         if pdf_style == "Tabela (Índice/Catálogo)":
-                                            file_bytes = generate_pdf_table(dict(records_by_type)); filename = "cpindexator_indice.pdf"
+                                            file_bytes = generate_pdf_table(dict(records_by_type))
+                                            filename = "cpindexator_indice.pdf"
                                         else:
-                                            file_bytes = generate_pdf_detailed(dict(records_by_type)); filename = "cpindexator_relatorio_detalhado.pdf"
-                                        if file_bytes: st.download_button("📥 Baixar PDF", file_bytes, filename, "application/pdf")
-                                else: st.warning("Nenhum registro encontrado nos livros selecionados.")
-                        except Exception as e: st.error(f"Erro ao gerar arquivo: {e}")
-        else: st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
-
+                                            file_bytes = generate_pdf_detailed(dict(records_by_type))
+                                            filename = "cpindexator_relatorio_detalhado.pdf"
+                                        if file_bytes: 
+                                            st.download_button("📥 Baixar PDF", file_bytes, filename, "application/pdf")
+                                else: 
+                                    st.warning("Nenhum registro encontrado nos livros selecionados.")
+                        except Exception as e: 
+                            st.error(f"Erro ao gerar arquivo: {e}")
+        else: 
+            st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
 
     if is_admin:
         with tab_admin:
-            # (A aba de admin permanece a mesma)
-            st.header("⚙️ Administração do Banco de Dados"); st.markdown("---")
+            # A aba de admin permanece a mesma
+            st.header("⚙️ Administração do Banco de Dados")
+            st.markdown("---")
             st.subheader("Exportar Backup Completo")
             st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
             if st.button("Gerar Arquivo de Backup (CSV)"):
                 try:
                     with engine.connect() as conn:
-                        df = pd.read_sql_table('registros', conn); csv = df.to_csv(index=False).encode('utf-8')
+                        df = pd.read_sql_table('registros', conn)
+                        csv = df.to_csv(index=False).encode('utf-8')
                         st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
-                except Exception as e: st.error(f"Erro ao exportar o banco de dados: {e}")
+                except Exception as e: 
+                    st.error(f"Erro ao exportar o banco de dados: {e}")
             st.markdown("---")
             st.subheader("Importar de um Backup")
             st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
@@ -666,7 +725,8 @@ def main_app():
                         except Exception as e:
                             st.error(f"Erro durante a importação: {e}")
                             st.info("A operação foi revertida. Seus dados antigos estão seguros.")
-                    else: st.error("Você precisa confirmar a ação para continuar.")
+                    else: 
+                        st.error("Você precisa confirmar a ação para continuar.")
 
 # --- ROTEADOR PRINCIPAL ---
 if 'user' not in st.session_state:
