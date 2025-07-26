@@ -502,7 +502,7 @@ def main_app():
                 # Renderizar bloco dinâmico de Partes Envolvidas
                 if record_type == "Notas":
                     partes_envolvidas_inputs = []
-                    st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='font-size:14px;'>Partes Envolvidas:</h4>", unsafe_allow_html=True)
                     for i in range(st.session_state.get('num_partes', 2)):
                         partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
                 
@@ -765,7 +765,7 @@ def main_app():
                         # Renderizar bloco dinâmico de Partes Envolvidas
                         if record_type == "Notas":
                             edit_partes_inputs = []
-                            st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
+                            st.markdown("<h4 style='font-size:14px;'>Partes Envolvidas:</h4>", unsafe_allow_html=True)
                             partes_str = record.get('partes_envolvidas', '')
                             partes_list = partes_str.split('; ') if partes_str else []
 
