@@ -490,41 +490,52 @@ def main_app():
                 entries = {}
                 fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
                 
-                # Renderizar campos até "Local do Registro"
-                for field in fields[:fields.index("Partes Envolvidas")]:
-                    default_value = ""
-                    if field == "Fonte (Livro)" and book_preset: 
-                        default_value = book_preset
-                    elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
-                        default_value = location_preset
-                    entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                # Verificar se "Partes Envolvidas" está nos campos (só existe em "Notas")
+                if "Partes Envolvidas" in fields:
+                    # Renderizar campos até "Partes Envolvidas"
+                    partes_index = fields.index("Partes Envolvidas")
+                    for field in fields[:partes_index]:
+                        default_value = ""
+                        if field == "Fonte (Livro)" and book_preset: 
+                            default_value = book_preset
+                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
+                            default_value = location_preset
+                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
-                # Filamento horizontal ANTES de "Partes Envolvidas"
-                st.markdown("<hr>", unsafe_allow_html=True)
+                    # Filamento horizontal ANTES de "Partes Envolvidas"
+                    st.markdown("<hr>", unsafe_allow_html=True)
 
-                # Bloco dinâmico
-                if record_type == "Notas":
+                    # Bloco dinâmico para "Partes Envolvidas" (apenas para "Notas")
                     partes_envolvidas_inputs = []
                     st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
                     for i in range(st.session_state.get('num_partes', 2)):
                         partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
 
-                # Filamento horizontal DEPOIS de "Partes Envolvidas"
-                st.markdown("<hr>", unsafe_allow_html=True)
+                    # Filamento horizontal DEPOIS de "Partes Envolvidas"
+                    st.markdown("<hr>", unsafe_allow_html=True)
 
-                # Renderizar campos restantes (a partir de "Resumo do Teor")
-                for field in fields[fields.index("Partes Envolvidas")+1:]:
-                    default_value = ""
-                    if field == "Fonte (Livro)" and book_preset: 
-                        default_value = book_preset
-                    elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
-                        default_value = location_preset
-                    entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                    # Renderizar campos restantes (a partir do campo após "Partes Envolvidas")
+                    for field in fields[partes_index+1:]:
+                        default_value = ""
+                        if field == "Fonte (Livro)" and book_preset: 
+                            default_value = book_preset
+                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
+                            default_value = location_preset
+                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                else:
+                    # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
+                    for field in fields:
+                        default_value = ""
+                        if field == "Fonte (Livro)" and book_preset: 
+                            default_value = book_preset
+                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
+                            default_value = location_preset
+                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
                 submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
                 
                 if submitted:
-                    if record_type == "Notas" and partes_envolvidas_inputs:
+                    if record_type == "Notas" and "Partes Envolvidas" in fields:
                         partes_values = [p.strip() for p in partes_envolvidas_inputs if p.strip()]
                         entries['partes_envolvidas'] = "; ".join(partes_values)
 
@@ -762,17 +773,19 @@ def main_app():
                         updated_entries = {}
                         fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
 
-                        # Renderizar campos até "Local do Registro"
-                        for field in fields[:fields.index("Partes Envolvidas")]:
-                            col_name = to_col_name(field)
-                            current_value = record.get(col_name, "")
-                            updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                        # Verificar se "Partes Envolvidas" está nos campos (só existe em "Notas")
+                        if "Partes Envolvidas" in fields:
+                            # Renderizar campos até "Partes Envolvidas"
+                            partes_index = fields.index("Partes Envolvidas")
+                            for field in fields[:partes_index]:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
+                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
-                        # Filamento horizontal ANTES de "Partes Envolvidas"
-                        st.markdown("<hr>", unsafe_allow_html=True)
+                            # Filamento horizontal ANTES de "Partes Envolvidas"
+                            st.markdown("<hr>", unsafe_allow_html=True)
 
-                        # Renderizar bloco dinâmico de Partes Envolvidas
-                        if record_type == "Notas":
+                            # Renderizar bloco dinâmico de Partes Envolvidas
                             edit_partes_inputs = []
                             st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
                             partes_str = record.get('partes_envolvidas', '')
@@ -782,19 +795,25 @@ def main_app():
                                 val = partes_list[i] if i < len(partes_list) else ""
                                 edit_partes_inputs.append(st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}"))
 
-                        # Filamento horizontal DEPOIS de "Partes Envolvidas"
-                        st.markdown("<hr>", unsafe_allow_html=True)
+                            # Filamento horizontal DEPOIS de "Partes Envolvidas"
+                            st.markdown("<hr>", unsafe_allow_html=True)
 
-                        # Renderizar campos restantes após "Partes Envolvidas"
-                        for field in fields[fields.index("Partes Envolvidas")+1:]:
-                            col_name = to_col_name(field)
-                            current_value = record.get(col_name, "")
-                            updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                            # Renderizar campos restantes após "Partes Envolvidas"
+                            for field in fields[partes_index+1:]:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
+                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                        else:
+                            # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
+                            for field in fields:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
+                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
                         submitted = st.form_submit_button("Salvar Alterações")
                         
                         if submitted:
-                            if record_type == "Notas":
+                            if record_type == "Notas" and "Partes Envolvidas" in fields:
                                 partes_values = [p.strip() for p in edit_partes_inputs if p.strip()]
                                 updated_entries['partes_envolvidas'] = "; ".join(partes_values)
 
