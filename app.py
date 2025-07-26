@@ -6,6 +6,8 @@ from supabase import create_client, Client
 from collections import defaultdict
 from io import BytesIO
 import os
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 # --- Bloco de importação de bibliotecas de exportação ---
 try:
@@ -30,10 +32,10 @@ FORM_DEFINITIONS = {
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
 
 EXPORT_COLUMN_ORDER = {
-    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
-    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
-    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por'],
-    "Notas": ["id", "tipo_registro", "tipo_de_ato", "data_do_registro", "local_do_registro", "partes_envolvidas", "resumo_do_teor", "fonte_livro", "fonte_pagina_folha", "observacoes", 'criado_por', 'ultima_alteracao_por']
+    "Nascimento/Batismo": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Nascimento/Batismo"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em'],
+    "Casamento": ["id", "tipo_registro"] + [f.lower().replace(" ", "_") for f in FORM_DEFINITIONS["Casamento"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em'],
+    "Óbito": ["id", "tipo_registro"] + [f.lower().replace(" ", "_").replace("?", "") for f in FORM_DEFINITIONS["Óbito"] + COMMON_FIELDS] + ['criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em'],
+    "Notas": ["id", "tipo_registro", "tipo_de_ato", "data_do_registro", "local_do_registro", "partes_envolvidas", "resumo_do_teor", "fonte_livro", "fonte_pagina_folha", "observacoes", 'criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em']
 }
 
 COLUMN_LABELS = {
@@ -77,7 +79,9 @@ COLUMN_LABELS = {
     'tipo_de_ato': 'Tipo de Ato',
     'local_do_registro': 'Local do Registro',
     'partes_envolvidas': 'Partes Envolvidas',
-    'resumo_do_teor': 'Resumo do Teor'
+    'resumo_do_teor': 'Resumo do Teor',
+    'criado_em': 'Criado Em',
+    'atualizado_em': 'Atualizado Em'
 }
 
 TABLE_COLUMNS = {
@@ -163,16 +167,30 @@ def get_table_columns():
         result = conn.execute(query).fetchall()
         return [row[0] for row in result]
 
-# --- NOVA FUNÇÃO AUXILIAR ---
 def formatar_email_para_exibicao(email):
     """Remove a parte do domínio de uma string de e-mail para exibição."""
     if email and '@' in email:
         return email.split('@')[0]
     return email # Retorna o valor original se não for um e-mail ou for Nulo
-# -----------------------------
+
+def formatar_timestamp_para_exibicao(ts):
+    """Converte um timestamp UTC para o fuso de Brasília e o formata."""
+    if not ts:
+        return "N/D"  # Não Disponível
+    try:
+        brasilia_tz = ZoneInfo("America/Sao_Paulo")
+        # Garante que o timestamp de entrada é ciente do fuso (UTC)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+            
+        local_time = ts.astimezone(brasilia_tz)
+        return local_time.strftime('%d/%m/%Y %H:%M:%S')
+    except (AttributeError, TypeError):
+        # Fallback caso o dado não seja um timestamp válido
+        return str(ts)
 
 def fetch_records(search_term="", selected_books=None, search_categories=None):
-    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Alterado Por']
+    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
 
@@ -192,7 +210,7 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     search_fields = []
                     for fields_list in SEARCH_CATEGORIES.values():
                         search_fields.extend(fields_list)
-                    search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por'])
+                    search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em'])
                     search_fields = list(set(search_fields))
 
                 search_conditions = []
@@ -235,23 +253,34 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                 if 'data_do_registro' in df.columns:
                     df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
 
-                columns_to_show = ['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 'criado_por', 'ultima_alteracao_por']
+                # Aplica a formatação de email
+                if 'criado_por' in df.columns:
+                    df['criado_por'] = df['criado_por'].apply(formatar_email_para_exibicao)
+                if 'ultima_alteracao_por' in df.columns:
+                    df['ultima_alteracao_por'] = df['ultima_alteracao_por'].apply(formatar_email_para_exibicao)
+
+                # Aplica a formatação de timestamp
+                if 'criado_em' in df.columns:
+                    df['criado_em'] = df['criado_em'].apply(formatar_timestamp_para_exibicao)
+                if 'atualizado_em' in df.columns:
+                    df['atualizado_em'] = df['atualizado_em'].apply(formatar_timestamp_para_exibicao)
+                
+                # Define as colunas a serem exibidas na ordem desejada
+                columns_to_show = [
+                    'id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 
+                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
+                ]
+                
                 rename_dict = {
                     'id': 'ID',
                     'tipo_registro': 'Tipo',
                     'fonte_livro': 'Livro Fonte',
                     'criado_por': 'Criado Por',
-                    'ultima_alteracao_por': 'Alterado Por'
+                    'ultima_alteracao_por': 'Alterado Por',
+                    'criado_em': 'Criado Em',
+                    'atualizado_em': 'Alterado Em'
                 }
                 
-                # --- ALTERAÇÃO 2 ---
-                # Formata os emails para exibição na tabela principal
-                if 'criado_por' in df.columns:
-                    df['criado_por'] = df['criado_por'].apply(formatar_email_para_exibicao)
-                if 'ultima_alteracao_por' in df.columns:
-                    df['ultima_alteracao_por'] = df['ultima_alteracao_por'].apply(formatar_email_para_exibicao)
-                # ---------------------
-
                 final_cols = [col for col in columns_to_show if col in df.columns]
                 return df[final_cols].rename(columns=rename_dict)
             else:
@@ -308,7 +337,7 @@ def generate_pdf_table(records_by_type):
             if record_type in TABLE_COLUMNS:
                 columns_to_show = [col for col in TABLE_COLUMNS[record_type] if col in df.columns]
             else:
-                columns_to_show = [col for col in df.columns if col not in ['criado_por', 'ultima_alteracao_por', 'caminho_da_imagem']]
+                columns_to_show = [col for col in df.columns if col not in ['criado_por', 'ultima_alteracao_por', 'caminho_da_imagem', 'criado_em', 'atualizado_em']]
             df_filtered = df[columns_to_show]
             headers = [COLUMN_LABELS.get(col, col.replace('_', ' ').title()) for col in columns_to_show]
             data = [headers]
@@ -356,7 +385,11 @@ def generate_pdf_detailed(records_by_type):
                     if field in record and pd.notna(record[field]) and record[field] != '':
                         label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
                         value = str(record[field])
-                        if field == 'partes_envolvidas':
+                        if field in ['criado_por', 'ultima_alteracao_por']:
+                            value = formatar_email_para_exibicao(value)
+                        elif field in ['criado_em', 'atualizado_em']:
+                            value = formatar_timestamp_para_exibicao(record[field])
+                        elif field == 'partes_envolvidas':
                             value = value.replace(';', '<br/>- ')
                             value = f"- {value}"
                         if len(value) > 60:
@@ -395,10 +428,7 @@ def login_form():
 
 def main_app():
     st.sidebar.title("Bem-vindo(a)!")
-    # --- ALTERAÇÃO 1 ---
-    # Formata o e-mail do usuário logado para exibição
     st.sidebar.info(f"Logado como: {formatar_email_para_exibicao(st.session_state.user.email)}")
-    # -------------------
     if st.sidebar.button("Sair (Logout)"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
@@ -422,7 +452,7 @@ def main_app():
     with tab_add:
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
 
         col1, col2 = st.columns(2)
         with col1:
@@ -482,8 +512,11 @@ def main_app():
 
                     try:
                         with engine.connect() as conn:
-                            cols = ["tipo_registro"] + list(entries.keys()) + ["criado_por", "ultima_alteracao_por"]
-                            vals = [record_type] + list(entries.values()) + [user_email, user_email]
+                            now_utc = datetime.now(timezone.utc)
+                            
+                            # Adiciona as novas colunas e valores
+                            cols = ["tipo_registro"] + list(entries.keys()) + ["criado_por", "ultima_alteracao_por", "criado_em", "atualizado_em"]
+                            vals = [record_type] + list(entries.values()) + [user_email, user_email, now_utc, now_utc]
 
                             final_cols = []
                             final_vals = []
@@ -666,7 +699,6 @@ def main_app():
                 st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
                 st.markdown("---")
 
-                # --- ALTERAÇÃO 3 ---
                 if action == "view":
                     for key, value in record.items():
                         if value:
@@ -675,11 +707,12 @@ def main_app():
 
                             if key in ['criado_por', 'ultima_alteracao_por']:
                                 display_value = formatar_email_para_exibicao(value)
+                            elif key in ['criado_em', 'atualizado_em']:
+                                display_value = formatar_timestamp_para_exibicao(value)
                             elif key == 'partes_envolvidas':
                                 display_value = str(value).replace(';', ' | ')
                             
                             st.write(f"**{label}:** {display_value}")
-                # ---------------------
 
                 elif action == "edit":
                     record_type = record.get('tipo_registro')
@@ -737,12 +770,19 @@ def main_app():
 
                             try:
                                 with engine.connect() as conn:
+                                    now_utc = datetime.now(timezone.utc)
+                                    
                                     set_clause = ", ".join([f"{col} = :{col}" for col in updated_entries.keys()])
-                                    set_clause += ", ultima_alteracao_por = :user_email"
+                                    # Adiciona a atualização da data e do usuário que alterou
+                                    set_clause += ", ultima_alteracao_por = :user_email, atualizado_em = :now_utc"
+                                    
                                     query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
+                                    
                                     params = updated_entries
                                     params['id'] = record_id
                                     params['user_email'] = user_email
+                                    params['now_utc'] = now_utc # Adiciona o novo parâmetro
+                                    
                                     conn.execute(query, params)
                                     conn.commit()
                                     st.success("Registro atualizado com sucesso!")
