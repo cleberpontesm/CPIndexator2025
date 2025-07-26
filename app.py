@@ -459,7 +459,7 @@ def main_app():
         with col1:
             book_preset = st.selectbox("[Usar após a primeira adição] Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
         with col2:
-            location_preset = st.selectbox("Preencher 'Local' com:", [""] + all_locations, key="location_preset_add")
+            location_preset = st.selectbox("[Usar após a primeira adição] Preencher 'Local' com:", [""] + all_locations, key="location_preset_add")
 
         record_type = st.selectbox("Tipo de Registro:", list(FORM_DEFINITIONS.keys()), index=None, placeholder="Selecione...")
 
