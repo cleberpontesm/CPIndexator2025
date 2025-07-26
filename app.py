@@ -434,7 +434,6 @@ def main_app():
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
         # Local do evento e local do registro são combinados para o preset
-        # CORREÇÃO: Adicionados os parênteses que faltavam
         all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
 
         col1, col2 = st.columns(2)
@@ -546,7 +545,7 @@ def main_app():
                     st.session_state.manage_books_select = all_books_manage
                     st.rerun()
                 
-                # ESTILO ADICIONADO: Diminui o tamanho da fonte do botão
+                # ESTILO MODIFICADO: Diminui o tamanho da fonte do botão para 10px
                 st.markdown("""
                 <style>
                     div[data-testid="stHorizontalBlock"] > div:first-child button {
@@ -654,54 +653,8 @@ def main_app():
                     st.session_state.search_categories_select = []
                     st.rerun()
 
-            # Ferramenta para excluir múltiplos registros
-            st.markdown("---")
-            st.subheader("Excluir Múltiplos Registros")
-            st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
-            
-            # Campo para inserir IDs separados por vírgula
-            ids_to_delete = st.text_input(
-                "IDs para excluir (separados por vírgula):",
-                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
-            )
-            
-            # Botão de confirmação
-            if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
-                if not ids_to_delete:
-                    st.error("Por favor, insira pelo menos um ID para excluir.")
-                else:
-                    try:
-                        # Parse dos IDs
-                        id_list = [int(id.strip()) for id in ids_to_delete.split(",") if id.strip().isdigit()]
-                        
-                        if not id_list:
-                            st.error("Nenhum ID válido encontrado.")
-                        else:
-                            st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
-                            confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
-                            
-                            if confirm:
-                                try:
-                                    with engine.connect() as conn:
-                                        # Cria uma lista de parâmetros para a query
-                                        params = [{"id": id} for id in id_list]
-                                        
-                                        # Executa a exclusão em lote
-                                        result = conn.execute(
-                                            text("DELETE FROM registros WHERE id = :id"),
-                                            params
-                                        )
-                                        conn.commit()
-                                        
-                                        st.success(f"{result.rowcount} registros excluídos com sucesso!")
-                                        # Força recarregar os dados
-                                        st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro durante a exclusão: {e}")
-                            else:
-                                st.info("Exclusão cancelada.")
-                    except Exception as e:
-                        st.error(f"Erro ao processar IDs: {e}")
+            # ------------------- ORDEM ALTERADA -------------------
+            # Bloco "Gerenciar Registro" agora vem PRIMEIRO.
             
             # Gerenciamento de registro individual
             st.markdown("---")
@@ -848,6 +801,55 @@ def main_app():
                         except Exception as e: 
                             st.error(f"Erro ao excluir: {e}")
 
+            # Ferramenta para excluir múltiplos registros
+            st.markdown("---")
+            st.subheader("Excluir Múltiplos Registros")
+            st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
+            
+            # Campo para inserir IDs separados por vírgula
+            ids_to_delete = st.text_input(
+                "IDs para excluir (separados por vírgula):",
+                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
+            )
+            
+            # Botão de confirmação
+            if st.button("Excluir Múltiplos", type="primary", key="delete_multiple_btn"):
+                if not ids_to_delete:
+                    st.error("Por favor, insira pelo menos um ID para excluir.")
+                else:
+                    try:
+                        # Parse dos IDs
+                        id_list = [int(id.strip()) for id in ids_to_delete.split(",") if id.strip().isdigit()]
+                        
+                        if not id_list:
+                            st.error("Nenhum ID válido encontrado.")
+                        else:
+                            st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
+                            confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
+                            
+                            if confirm:
+                                try:
+                                    with engine.connect() as conn:
+                                        # Cria uma lista de parâmetros para a query
+                                        params = [{"id": id_val} for id_val in id_list]
+                                        
+                                        # Executa a exclusão em lote
+                                        result = conn.execute(
+                                            text("DELETE FROM registros WHERE id = :id"),
+                                            params
+                                        )
+                                        conn.commit()
+                                        
+                                        st.success(f"{result.rowcount} registros excluídos com sucesso!")
+                                        # Força recarregar os dados
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro durante a exclusão: {e}")
+                            else:
+                                st.info("Exclusão cancelada.")
+                    except Exception as e:
+                        st.error(f"Erro ao processar IDs: {e}")
+            
     with tab_export:
         # A aba de exportação não precisa de grandes mudanças, pois se baseia nos dicionários já atualizados
         st.header("Exportar Dados")
