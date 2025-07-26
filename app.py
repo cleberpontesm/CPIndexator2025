@@ -434,7 +434,7 @@ def main_app():
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
         # Local do evento e local do registro são combinados para o preset
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
 
         col1, col2 = st.columns(2)
         with col1:
@@ -544,6 +544,16 @@ def main_app():
                 if st.button("Selecionar Todos", key="select_all_books", use_container_width=True):
                     st.session_state.manage_books_select = all_books_manage
                     st.rerun()
+                
+                # ESTILO ADICIONADO: Diminui o tamanho da fonte do botão
+                st.markdown("""
+                <style>
+                    div[data-testid="stHorizontalBlock"] > div:first-child button {
+                        font-size: 10px !important;
+                        padding: 0.25em 0.5em !important;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
                     
             selected_books_manage = st.sidebar.multiselect(
                 "Filtrar por Livro(s):", 
@@ -872,7 +882,7 @@ def main_app():
                                             filename = "cpindexator_indice.pdf"
                                         else:
                                             file_bytes = generate_pdf_detailed(dict(records_by_type))
-                                            filename = "cpindexator_relatorio_detalhado.pdf"
+                                            filename = "cpindexator_relatorio_detailed.pdf"
                                         if file_bytes: 
                                             st.download_button("📥 Baixar PDF", file_bytes, filename, "application/pdf")
                                 else: 
