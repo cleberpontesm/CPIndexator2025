@@ -94,6 +94,31 @@ TABLE_COLUMNS = {
     "Notas": ['id', 'tipo_de_ato', 'data_do_registro', 'partes_envolvidas', 'resumo_do_teor', 'fonte_livro', 'fonte_pagina_folha']
 }
 
+# Categorias de campos para busca avançada
+SEARCH_CATEGORIES = {
+    "Nomes": [
+        'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'nome_do_noivo', 'nome_da_noiva', 
+        'nome_do_falecido', 'padrinhos', 'testemunhas', 'pai_do_noivo', 'mae_do_noivo', 
+        'pai_da_noiva', 'mae_da_noiva', 'avo_paterno', 'avo_paterna', 'avo_materno', 
+        'avo_materna', 'conjuge_sobrevivente', 'filiacao', 'partes_envolvidas'
+    ],
+    "Locais": [
+        'local_do_evento', 'local_do_obito', 'local_do_registro', 'local_do_sepultamento'
+    ],
+    "Datas": [
+        'data_do_registro', 'data_do_evento', 'data_do_obito'
+    ],
+    "Idades": [
+        'idade_do_noivo', 'idade_da_noiva', 'idade_no_obito'
+    ],
+    "Informações Gerais": [
+        'observacoes', 'resumo_do_teor', 'tipo_de_ato', 'causa_mortis', 'deixou_filhos', 'tipo_registro'
+    ],
+    "Fontes": [
+        'fonte_livro', 'fonte_pagina_folha', 'caminho_da_imagem'
+    ]
+}
+
 # --- CONFIGURAÇÃO INICIAL E CLIENTES ---
 st.set_page_config(layout="wide", page_title="CPIndexator Web")
 
@@ -146,38 +171,53 @@ def get_table_columns():
         result = conn.execute(query).fetchall()
         return [row[0] for row in result]
 
-## MODIFICADO ## - Função fetch_records ajustada para incluir busca nos campos de "Notas"
-def fetch_records(search_term="", selected_books=None):
+## MODIFICADO ## - Função fetch_records com busca avançada por categorias
+def fetch_records(search_term="", selected_books=None, search_categories=None):
     new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Alterado Por']
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
 
     try:
         with engine.connect() as conn:
-            # Adiciona colunas de "Notas" à busca
-            search_logic = """
-            AND (
-                CAST(id AS TEXT) ILIKE :search_term OR
-                COALESCE(tipo_registro, '') ILIKE :search_term OR
-                COALESCE(nome_do_registrado, '') ILIKE :search_term OR
-                COALESCE(nome_do_noivo, '') ILIKE :search_term OR
-                COALESCE(nome_do_falecido, '') ILIKE :search_term OR
-                COALESCE(fonte_livro, '') ILIKE :search_term OR
-                COALESCE(fonte_pagina_folha, '') ILIKE :search_term OR
-                COALESCE(observacoes, '') ILIKE :search_term OR
-                COALESCE(tipo_de_ato, '') ILIKE :search_term OR
-                COALESCE(partes_envolvidas, '') ILIKE :search_term OR
-                COALESCE(resumo_do_teor, '') ILIKE :search_term
-            )
-            """
             base_query = "SELECT * FROM registros WHERE fonte_livro = ANY(:books)"
+            params = {'books': selected_books}
 
             if search_term:
-                query = base_query + search_logic + " ORDER BY id"
-                params = {'books': selected_books, 'search_term': f'%{search_term}%'}
+                # Determina quais campos buscar baseado nas categorias selecionadas
+                if search_categories and len(search_categories) > 0:
+                    # Busca apenas nas categorias selecionadas
+                    search_fields = []
+                    for category in search_categories:
+                        if category in SEARCH_CATEGORIES:
+                            search_fields.extend(SEARCH_CATEGORIES[category])
+                    # Remove duplicatas
+                    search_fields = list(set(search_fields))
+                else:
+                    # Busca em todos os campos se nenhuma categoria for selecionada
+                    search_fields = []
+                    for fields_list in SEARCH_CATEGORIES.values():
+                        search_fields.extend(fields_list)
+                    # Adiciona também outros campos que podem não estar nas categorias
+                    search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por'])
+                    # Remove duplicatas
+                    search_fields = list(set(search_fields))
+
+                # Constrói a lógica de busca dinamicamente
+                search_conditions = []
+                for field in search_fields:
+                    if field == 'id':
+                        search_conditions.append(f"CAST({field} AS TEXT) ILIKE :search_term")
+                    else:
+                        search_conditions.append(f"COALESCE({field}, '') ILIKE :search_term")
+                
+                if search_conditions:
+                    search_logic = f" AND ({' OR '.join(search_conditions)})"
+                    query = base_query + search_logic + " ORDER BY id"
+                    params['search_term'] = f'%{search_term}%'
+                else:
+                    query = base_query + " ORDER BY id"
             else:
                 query = base_query + " ORDER BY id"
-                params = {'books': selected_books}
 
             result = conn.execute(text(query), params)
             df = pd.DataFrame(result.fetchall())
@@ -195,7 +235,6 @@ def fetch_records(search_term="", selected_books=None):
                 ## ADICIONADO: Define o "Nome Principal" para Notas como a primeira parte envolvida
                 if 'partes_envolvidas' in df.columns:
                     df.loc[df['tipo_registro'] == 'Notas', 'Nome Principal'] = df['partes_envolvidas'].str.split(';').str[0].fillna('N/A')
-
 
                 df['Data'] = 'N/A'
                 if 'data_do_evento' in df.columns:
@@ -501,13 +540,96 @@ def main_app():
         else:
             selected_books_manage = st.sidebar.multiselect("Filtrar por Livro(s):", all_books_manage, default=all_books_manage, key="manage_books_select")
 
-        search_term = st.sidebar.text_input("Busca Rápida por Termo:")
+        # Filtros de busca avançada
+        st.sidebar.subheader("🔍 Busca Avançada")
+        search_term = st.sidebar.text_input("Termo de Busca:", help="Digite qualquer palavra ou frase que deseja encontrar")
+        
+        # Seletor de categorias
+        search_categories = st.sidebar.multiselect(
+            "Buscar nas Categorias:",
+            options=list(SEARCH_CATEGORIES.keys()),
+            default=[],  # Nenhuma categoria selecionada = busca em todas
+            help="Selecione em quais tipos de informação buscar. Se nenhuma categoria for selecionada, a busca será feita em todos os campos.",
+            key="search_categories_select"
+        )
+        
+        # Explicação do sistema de busca
+        if search_categories:
+            st.sidebar.info(f"🎯 Buscando apenas em: {', '.join(search_categories)}")
+            
+            # Mostra quais campos estão incluídos nas categorias selecionadas
+            with st.sidebar.expander("Ver campos incluídos"):
+                for category in search_categories:
+                    if category in SEARCH_CATEGORIES:
+                        fields = [COLUMN_LABELS.get(field, field.replace('_', ' ').title()) for field in SEARCH_CATEGORIES[category]]
+                        st.write(f"**{category}:** {', '.join(fields)}")
+        else:
+            st.sidebar.info("🌐 Buscando em todos os campos disponíveis")
+
+        # Seção de ajuda sobre busca
+        with st.sidebar.expander("ℹ️ Como usar a Busca Avançada"):
+            st.markdown("""
+            **Busca por Termo:**
+            - Digite qualquer palavra ou frase
+            - A busca não diferencia maiúsculas/minúsculas
+            - Use termos parciais (ex: "Fort" encontra "Fortaleza")
+            
+            **Filtro por Categorias:**
+            - **Nomes**: Busca em todos os campos de nomes de pessoas
+            - **Locais**: Busca apenas em campos de localização
+            - **Datas**: Busca em todos os campos de data
+            - **Idades**: Busca em campos de idade
+            - **Informações Gerais**: Observações, resumos, tipos de ato
+            - **Fontes**: Livros, páginas, caminhos de imagem
+            
+            **Dicas:**
+            - Deixe as categorias vazias para buscar em tudo
+            - Combine termo + categoria para busca específica
+            - Use o botão "Limpar Filtros" para resetar
+            """)
 
         if not selected_books_manage:
             st.warning("Por favor, selecione ao menos um livro no filtro.")
         else:
-            df_records = fetch_records(search_term, selected_books_manage)
+            # Chama a função com os novos parâmetros
+            import time
+            start_time = time.time()
+            df_records = fetch_records(search_term, selected_books_manage, search_categories)
+            search_time = time.time() - start_time
+            
+            # Mostra informações sobre os resultados
+            if not df_records.empty:
+                total_results = len(df_records)
+                if search_term:
+                    if search_categories:
+                        st.success(f"📊 Encontrados **{total_results}** registros contendo **'{search_term}'** nas categorias: {', '.join(search_categories)} ⏱️ ({search_time:.2f}s)")
+                    else:
+                        st.success(f"📊 Encontrados **{total_results}** registros contendo **'{search_term}'** em qualquer campo ⏱️ ({search_time:.2f}s)")
+                else:
+                    st.info(f"📊 Exibindo **{total_results}** registros dos livros selecionados ⏱️ ({search_time:.2f}s)")
+                
+                # Estatísticas por tipo de registro
+                if 'Tipo' in df_records.columns:
+                    tipo_counts = df_records['Tipo'].value_counts()
+                    stats_text = " | ".join([f"{tipo}: {count}" for tipo, count in tipo_counts.items()])
+                    st.caption(f"📈 Distribuição por tipo: {stats_text}")
+                    
+            else:
+                if search_term:
+                    st.warning(f"❌ Nenhum registro encontrado para o termo **'{search_term}'** ⏱️ ({search_time:.2f}s)")
+                    if search_categories:
+                        st.info("💡 Tente expandir as categorias de busca ou remover filtros para ver mais resultados")
+                else:
+                    st.info("📋 Nenhum registro encontrado nos livros selecionados")
+            
             st.dataframe(df_records, use_container_width=True, hide_index=True)
+
+            # Botão para limpar filtros de busca
+            if search_term or search_categories:
+                st.sidebar.markdown("---")
+                if st.sidebar.button("🗑️ Limpar Filtros de Busca"):
+                    st.session_state.search_categories_select = []
+                    st.rerun()
 
             st.header("Gerenciar Registro Selecionado")
             record_id_to_manage = st.number_input("Digite o ID do registro para ver detalhes, editar ou excluir:", min_value=1, step=1, value=None, key="record_id_input")
