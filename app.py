@@ -538,7 +538,19 @@ def main_app():
             st.warning("Nenhum livro encontrado no banco de dados. Adicione registros primeiro.")
             selected_books_manage = []
         else:
-            selected_books_manage = st.sidebar.multiselect("Filtrar por Livro(s):", all_books_manage, default=all_books_manage, key="manage_books_select")
+            # Botão para selecionar todos os livros
+            col_select_all, _ = st.sidebar.columns([1, 3])
+            with col_select_all:
+                if st.button("Selecionar Todos", key="select_all_books", use_container_width=True):
+                    st.session_state.manage_books_select = all_books_manage
+                    st.rerun()
+                    
+            selected_books_manage = st.sidebar.multiselect(
+                "Filtrar por Livro(s):", 
+                all_books_manage, 
+                default=all_books_manage, 
+                key="manage_books_select"
+            )
 
         # Filtros de busca avançada
         st.sidebar.subheader("🔍 Busca Avançada")
@@ -631,8 +643,65 @@ def main_app():
                     st.session_state.search_categories_select = []
                     st.rerun()
 
+            # Ferramenta para excluir múltiplos registros
+            st.markdown("---")
+            st.subheader("Excluir Múltiplos Registros")
+            st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
+            
+            # Campo para inserir IDs separados por vírgula
+            ids_to_delete = st.text_input(
+                "IDs para excluir (separados por vírgula):",
+                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
+            )
+            
+            # Botão de confirmação
+            if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
+                if not ids_to_delete:
+                    st.error("Por favor, insira pelo menos um ID para excluir.")
+                else:
+                    try:
+                        # Parse dos IDs
+                        id_list = [int(id.strip()) for id in ids_to_delete.split(",") if id.strip().isdigit()]
+                        
+                        if not id_list:
+                            st.error("Nenhum ID válido encontrado.")
+                        else:
+                            st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
+                            confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
+                            
+                            if confirm:
+                                try:
+                                    with engine.connect() as conn:
+                                        # Cria uma lista de parâmetros para a query
+                                        params = [{"id": id} for id in id_list]
+                                        
+                                        # Executa a exclusão em lote
+                                        result = conn.execute(
+                                            text("DELETE FROM registros WHERE id = :id"),
+                                            params
+                                        )
+                                        conn.commit()
+                                        
+                                        st.success(f"{result.rowcount} registros excluídos com sucesso!")
+                                        # Força recarregar os dados
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro durante a exclusão: {e}")
+                            else:
+                                st.info("Exclusão cancelada.")
+                    except Exception as e:
+                        st.error(f"Erro ao processar IDs: {e}")
+            
+            # Gerenciamento de registro individual
+            st.markdown("---")
             st.header("Gerenciar Registro Selecionado")
-            record_id_to_manage = st.number_input("Digite o ID do registro para ver detalhes, editar ou excluir:", min_value=1, step=1, value=None, key="record_id_input")
+            record_id_to_manage = st.number_input(
+                "Digite o ID do registro e tecle ENTER para ver detalhes, editar ou excluir:", 
+                min_value=1, 
+                step=1, 
+                value=None, 
+                key="record_id_input"
+            )
 
             if record_id_to_manage:
                 if 'record_id' not in st.session_state or st.session_state.record_id != record_id_to_manage:
