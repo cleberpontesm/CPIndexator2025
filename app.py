@@ -243,7 +243,7 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     df.loc[df['data_do_obito'].notna(), 'Data'] = df['data_do_obito']
                 ## ADICIONADO: Define a data para Notas
                 if 'data_do_registro' in df.columns:
-                     df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
+                    df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
 
                 columns_to_show = ['id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 'criado_por', 'ultima_alteracao_por']
                 rename_dict = {
@@ -434,8 +434,8 @@ def main_app():
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
         # Local do evento e local do registro são combinados para o preset
-        # CORREÇÃO: Removido o parêntese extra
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
+        # CORREÇÃO: Adicionados os parênteses que faltavam
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
 
         col1, col2 = st.columns(2)
         with col1:
