@@ -434,6 +434,7 @@ def main_app():
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
         # Local do evento e local do registro são combinados para o preset
+        # CORREÇÃO: Removido o parêntese extra
         all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
 
         col1, col2 = st.columns(2)
@@ -549,7 +550,7 @@ def main_app():
                 st.markdown("""
                 <style>
                     div[data-testid="stHorizontalBlock"] > div:first-child button {
-                        font-size: 10px !important;
+                        font-size: 14px !important;
                         padding: 0.25em 0.5em !important;
                     }
                 </style>
