@@ -27,7 +27,7 @@ FORM_DEFINITIONS = {
     "Nascimento/Batismo": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Registrado", "Nome do Pai", "Nome da Mãe", "Padrinhos", "Avô paterno", "Avó paterna", "Avô materno", "Avó materna"],
     "Casamento": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Noivo", "Idade do Noivo", "Pai do Noivo", "Mãe do Noivo", "Nome da Noiva", "Idade da Noiva", "Pai da Noiva", "Mãe da Noiva", "Testemunhas"],
     "Óbito": ["Data do Registro", "Data do Óbito", "Local do Óbito", "Nome do Falecido", "Idade no Óbito", "Filiação", "Cônjuge Sobrevivente", "Deixou Filhos?", "Causa Mortis", "Local do Sepultamento"],
-    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Resumo do Teor"]
+    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Partes Envolvidas", "Resumo do Teor"]  # Ordem ajustada aqui
 }
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
 
@@ -453,7 +453,7 @@ def main_app():
     with tab_add:
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
 
         col1, col2 = st.columns(2)
         with col1:
@@ -489,7 +489,9 @@ def main_app():
             with st.form("new_record_form", clear_on_submit=True):
                 entries = {}
                 fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
-                for field in fields:
+                
+                # Renderizar campos até "Local do Registro"
+                for field in fields[:fields.index("Partes Envolvidas")]:
                     default_value = ""
                     if field == "Fonte (Livro)" and book_preset: 
                         default_value = book_preset
@@ -497,12 +499,21 @@ def main_app():
                         default_value = location_preset
                     entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
-                partes_envolvidas_inputs = []
+                # Renderizar bloco dinâmico de Partes Envolvidas
                 if record_type == "Notas":
-                    st.markdown("---")
+                    partes_envolvidas_inputs = []
                     st.subheader("Partes Envolvidas")
                     for i in range(st.session_state.get('num_partes', 2)):
                         partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
+                
+                # Renderizar campos restantes após "Partes Envolvidas"
+                for field in fields[fields.index("Partes Envolvidas")+1:]:
+                    default_value = ""
+                    if field == "Fonte (Livro)" and book_preset: 
+                        default_value = book_preset
+                    elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
+                        default_value = location_preset
+                    entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
                 submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
                 
@@ -515,7 +526,6 @@ def main_app():
                         with engine.connect() as conn:
                             now_utc = datetime.now(timezone.utc)
                             
-                            # Adiciona as novas colunas e valores
                             cols = ["tipo_registro"] + list(entries.keys()) + ["criado_por", "ultima_alteracao_por", "criado_em", "atualizado_em"]
                             vals = [record_type] + list(entries.values()) + [user_email, user_email, now_utc, now_utc]
 
@@ -746,14 +756,15 @@ def main_app():
                         updated_entries = {}
                         fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
 
-                        for field in fields:
+                        # Renderizar campos até "Local do Registro"
+                        for field in fields[:fields.index("Partes Envolvidas")]:
                             col_name = to_col_name(field)
                             current_value = record.get(col_name, "")
                             updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
-                        edit_partes_inputs = []
+                        # Renderizar bloco dinâmico de Partes Envolvidas
                         if record_type == "Notas":
-                            st.markdown("---")
+                            edit_partes_inputs = []
                             st.subheader("Partes Envolvidas")
                             partes_str = record.get('partes_envolvidas', '')
                             partes_list = partes_str.split('; ') if partes_str else []
@@ -761,6 +772,12 @@ def main_app():
                             for i in range(st.session_state.get('edit_num_partes', 1)):
                                 val = partes_list[i] if i < len(partes_list) else ""
                                 edit_partes_inputs.append(st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}"))
+
+                        # Renderizar campos restantes após "Partes Envolvidas"
+                        for field in fields[fields.index("Partes Envolvidas")+1:]:
+                            col_name = to_col_name(field)
+                            current_value = record.get(col_name, "")
+                            updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
                         submitted = st.form_submit_button("Salvar Alterações")
                         
@@ -774,7 +791,6 @@ def main_app():
                                     now_utc = datetime.now(timezone.utc)
                                     
                                     set_clause = ", ".join([f"{col} = :{col}" for col in updated_entries.keys()])
-                                    # Adiciona a atualização da data e do usuário que alterou
                                     set_clause += ", ultima_alteracao_por = :user_email, atualizado_em = :now_utc"
                                     
                                     query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
@@ -782,7 +798,7 @@ def main_app():
                                     params = updated_entries
                                     params['id'] = record_id
                                     params['user_email'] = user_email
-                                    params['now_utc'] = now_utc # Adiciona o novo parâmetro
+                                    params['now_utc'] = now_utc
                                     
                                     conn.execute(query, params)
                                     conn.commit()
