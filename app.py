@@ -499,14 +499,20 @@ def main_app():
                         default_value = location_preset
                     entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
 
-                # Renderizar bloco dinâmico de Partes Envolvidas
+                # Filamento horizontal ANTES de "Partes Envolvidas"
+                st.markdown("<hr>", unsafe_allow_html=True)
+
+                # Bloco dinâmico
                 if record_type == "Notas":
                     partes_envolvidas_inputs = []
-                    st.markdown("<h4 style='font-size:14px;'>Partes Envolvidas👥:</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
                     for i in range(st.session_state.get('num_partes', 2)):
                         partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
-                
-                # Renderizar campos restantes após "Partes Envolvidas"
+
+                # Filamento horizontal DEPOIS de "Partes Envolvidas"
+                st.markdown("<hr>", unsafe_allow_html=True)
+
+                # Renderizar campos restantes (a partir de "Resumo do Teor")
                 for field in fields[fields.index("Partes Envolvidas")+1:]:
                     default_value = ""
                     if field == "Fonte (Livro)" and book_preset: 
@@ -762,16 +768,22 @@ def main_app():
                             current_value = record.get(col_name, "")
                             updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
 
+                        # Filamento horizontal ANTES de "Partes Envolvidas"
+                        st.markdown("<hr>", unsafe_allow_html=True)
+
                         # Renderizar bloco dinâmico de Partes Envolvidas
                         if record_type == "Notas":
                             edit_partes_inputs = []
-                            st.markdown("<h4 style='font-size:14px;'>Partes Envolvidas👥:</h4>", unsafe_allow_html=True)
+                            st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas</h4>", unsafe_allow_html=True)
                             partes_str = record.get('partes_envolvidas', '')
                             partes_list = partes_str.split('; ') if partes_str else []
 
                             for i in range(st.session_state.get('edit_num_partes', 1)):
                                 val = partes_list[i] if i < len(partes_list) else ""
                                 edit_partes_inputs.append(st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}"))
+
+                        # Filamento horizontal DEPOIS de "Partes Envolvidas"
+                        st.markdown("<hr>", unsafe_allow_html=True)
 
                         # Renderizar campos restantes após "Partes Envolvidas"
                         for field in fields[fields.index("Partes Envolvidas")+1:]:
