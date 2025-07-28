@@ -1229,6 +1229,62 @@ def main_app():
         with tab_admin:
             st.header("⚙️ Administração do Banco de Dados")
             st.markdown("---")
+            
+            st.subheader("Alimentar Banco de Dados com Excel")
+            st.info("Esta função permite adicionar múltiplos registros de uma vez a partir de uma planilha, sem apagar os dados existentes.")
+
+            record_type_upload = st.selectbox(
+                "1. Selecione o Tipo de Registro para o upload:",
+                list(FORM_DEFINITIONS.keys()),
+                index=None,
+                placeholder="Selecione o tipo...",
+                key="upload_record_type"
+            )
+
+            uploaded_excel_file = st.file_uploader(
+                "2. Escolha um arquivo Excel (.xlsx)",
+                type="xlsx",
+                key="excel_uploader"
+            )
+
+            if uploaded_excel_file is not None:
+                if record_type_upload:
+                    if st.button("Iniciar Importação do Excel", type="primary"):
+                        try:
+                            df = pd.read_excel(uploaded_excel_file)
+                            st.write("Pré-visualização dos dados carregados:", df.head())
+
+                            # Renomeia as colunas do Excel para o formato do banco de dados
+                            original_columns = df.columns.tolist()
+                            column_mapping = {col: to_col_name(col) for col in original_columns}
+                            df.rename(columns=column_mapping, inplace=True)
+
+                            # Adiciona as colunas de metadados
+                            now_utc = datetime.now(timezone.utc)
+                            df['tipo_registro'] = record_type_upload
+                            df['criado_em'] = now_utc
+                            df['atualizado_em'] = now_utc
+                            df['criado_por'] = user_email
+                            df['ultima_alteracao_por'] = user_email
+                            
+                            # Converte colunas que podem ser problemáticas para string
+                            for col in df.columns:
+                                if df[col].dtype == 'object':
+                                    df[col] = df[col].astype(str).fillna('')
+                            
+                            # Salva os novos registros no banco de dados (modo 'append')
+                            df.to_sql('registros', engine, if_exists='append', index=False)
+                            
+                            st.success(f"Importação concluída com sucesso! {len(df)} novos registros foram adicionados.")
+                            st.balloons()
+
+                        except Exception as e:
+                            st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
+                            st.warning("Verifique se os nomes das colunas no arquivo Excel correspondem exatamente aos campos dos formulários do sistema.")
+                else:
+                    st.error("Por favor, selecione o 'Tipo de Registro' antes de iniciar a importação.")
+            
+            st.markdown("---")
             st.subheader("Exportar Backup Completo")
             st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
             if st.button("Gerar Arquivo de Backup (CSV)"):
@@ -1239,13 +1295,14 @@ def main_app():
                         st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
                 except Exception as e: 
                     st.error(f"Erro ao exportar o banco de dados: {e}")
+
             st.markdown("---")
-            st.subheader("Importar de um Backup")
-            st.warning("🚨 **Atenção:** A importação irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
+            st.subheader("Importar de um Backup (Substituir Tudo)")
+            st.warning("🚨 **Atenção:** A importação de CSV irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
             uploaded_file = st.file_uploader("Escolha um arquivo CSV de backup", type="csv")
             if uploaded_file is not None:
                 confirm_import = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
-                if st.button("Iniciar Importação", disabled=not confirm_import):
+                if st.button("Iniciar Importação do CSV", disabled=not confirm_import):
                     if confirm_import:
                         try:
                             df_to_import = pd.read_csv(uploaded_file)
