@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL COM CHECKBOXES PARA PREENCHIMENTO AUTOMÁTICO
+# app.py - VERSÃO FINAL COM CHECKBOXES PARA PREENCHIMENTO AUTOMÁTICO - CORRIGIDA
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -492,175 +492,121 @@ def main_app():
 
         if record_type:
             if record_type == "Notas":
+                # Controle dinâmico de partes envolvidas FORA do formulário
                 if 'num_partes' not in st.session_state:
                     st.session_state.num_partes = 2
+                
+                # Interface para controlar número de partes envolvidas
+                st.markdown("### Configurar Partes Envolvidas")
+                col_info, col_btn1, col_btn2 = st.columns([2, 1, 1])
+                with col_info:
+                    st.info(f"Atualmente configurado para {st.session_state.num_partes} partes envolvidas")
+                with col_btn1:
+                    if st.button("➕ Adicionar Parte", key="add_parte_btn"):
+                        st.session_state.num_partes += 1
+                        st.rerun()
+                with col_btn2:
+                    if st.button("➖ Remover Última", key="remove_parte_btn") and st.session_state.num_partes > 1:
+                        st.session_state.num_partes -= 1
+                        st.rerun()
+                
+                st.markdown("---")
                 
                 with st.form("new_record_form", clear_on_submit=True):
                     entries = {}
                     fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
                     
-                    # Verificar se "Partes Envolvidas" está nos campos (só existe em "Notas")
-                    if "Partes Envolvidas" in fields:
-                        # Renderizar campos até "Partes Envolvidas"
-                        partes_index = fields.index("Partes Envolvidas")
-                        for field in fields[:partes_index]:
-                            if field == "Fonte (Livro)":
-                                col1, col2 = st.columns([4, 1])
-                                with col1:
-                                    entries[to_col_name(field)] = st.text_input(
-                                        f"{field}:", 
-                                        value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
-                                        key=f"add_{to_col_name(field)}"
-                                    )
-                                with col2:
-                                    st.session_state.fixar_livro = st.checkbox(
-                                        "Fixar", 
-                                        value=st.session_state.fixar_livro,
-                                        key=f"fixar_{to_col_name(field)}",
-                                        help="Marque para usar este valor automaticamente nos próximos registros"
-                                    )
-                                    if st.session_state.fixar_livro and entries[to_col_name(field)]:
-                                        st.session_state.livro_fixo = entries[to_col_name(field)]
-                            elif field in ["Local do Evento", "Local do Registro"]:
-                                col1, col2 = st.columns([4, 1])
-                                with col1:
-                                    entries[to_col_name(field)] = st.text_input(
-                                        f"{field}:", 
-                                        value=st.session_state.local_fixo if st.session_state.fixar_local else "",
-                                        key=f"add_{to_col_name(field)}"
-                                    )
-                                with col2:
-                                    st.session_state.fixar_local = st.checkbox(
-                                        "Fixar", 
-                                        value=st.session_state.fixar_local,
-                                        key=f"fixar_{to_col_name(field)}",
-                                        help="Marque para usar este valor automaticamente nos próximos registros"
-                                    )
-                                    if st.session_state.fixar_local and entries[to_col_name(field)]:
-                                        st.session_state.local_fixo = entries[to_col_name(field)]
-                            elif field == "Tipo de Ato":
-                                entries[to_col_name(field)] = st.selectbox(
-                                    f"{field}:",
-                                    options=TIPOS_DE_ATO,
-                                    index=None,
-                                    placeholder="Selecione um tipo...",
-                                    key=f"add_{to_col_name(field)}"
-                                )
-                            else:
+                    # Renderizar campos até "Partes Envolvidas"
+                    partes_index = fields.index("Partes Envolvidas")
+                    for field in fields[:partes_index]:
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
                                 entries[to_col_name(field)] = st.text_input(
                                     f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
                                     key=f"add_{to_col_name(field)}"
                                 )
-
-                        # Filamento horizontal ANTES de "Partes Envolvidas"
-                        st.markdown("<hr>", unsafe_allow_html=True)
-
-                        # Bloco dinâmico para "Partes Envolvidas" (apenas para "Notas")
-                        partes_envolvidas_inputs = []
-                        
-                        # Cria um container para o título e botões lado a lado
-                        partes_header = st.container()
-                        with partes_header:
-                            col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
-                            with col_title:
-                                st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas👥</h4>", unsafe_allow_html=True)
-                            with col_btn1:
-                                if st.button("➕ Adicionar Parte", key="add_parte_btn"):
-                                    st.session_state.num_partes += 1
-                                    st.rerun()
-                            with col_btn2:
-                                if st.button("➖ Remover Última", key="remove_parte_btn") and st.session_state.num_partes > 1:
-                                    st.session_state.num_partes -= 1
-                                    st.rerun()
-                        
-                        # Campos de entrada para as partes
-                        for i in range(st.session_state.get('num_partes', 2)):
-                            partes_envolvidas_inputs.append(st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}"))
-
-                        # Filamento horizontal DEPOIS de "Partes Envolvidas"
-                        st.markdown("<hr>", unsafe_allow_html=True)
-
-                        # Renderizar campos restantes (a partir do campo após "Partes Envolvidas")
-                        for field in fields[partes_index+1:]:
-                            if field == "Fonte (Livro)":
-                                col1, col2 = st.columns([4, 1])
-                                with col1:
-                                    entries[to_col_name(field)] = st.text_input(
-                                        f"{field}:", 
-                                        value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
-                                        key=f"add_{to_col_name(field)}"
-                                    )
-                                with col2:
-                                    st.session_state.fixar_livro = st.checkbox(
-                                        "Fixar", 
-                                        value=st.session_state.fixar_livro,
-                                        key=f"fixar_{to_col_name(field)}",
-                                        help="Marque para usar este valor automaticamente nos próximos registros"
-                                    )
-                                    if st.session_state.fixar_livro and entries[to_col_name(field)]:
-                                        st.session_state.livro_fixo = entries[to_col_name(field)]
-                            else:
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        elif field in ["Local do Evento", "Local do Registro"]:
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
                                 entries[to_col_name(field)] = st.text_input(
                                     f"{field}:", 
+                                    value=st.session_state.local_fixo if st.session_state.fixar_local else "",
                                     key=f"add_{to_col_name(field)}"
                                 )
-                    else:
-                        # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
-                        for field in fields:
-                            if field == "Fonte (Livro)":
-                                col1, col2 = st.columns([4, 1])
-                                with col1:
-                                    entries[to_col_name(field)] = st.text_input(
-                                        f"{field}:", 
-                                        value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
-                                        key=f"add_{to_col_name(field)}"
-                                    )
-                                with col2:
-                                    st.session_state.fixar_livro = st.checkbox(
-                                        "Fixar", 
-                                        value=st.session_state.fixar_livro,
-                                        key=f"fixar_{to_col_name(field)}",
-                                        help="Marque para usar este valor automaticamente nos próximos registros"
-                                    )
-                                    if st.session_state.fixar_livro and entries[to_col_name(field)]:
-                                        st.session_state.livro_fixo = entries[to_col_name(field)]
-                            elif field in ["Local do Evento", "Local do Registro"]:
-                                col1, col2 = st.columns([4, 1])
-                                with col1:
-                                    entries[to_col_name(field)] = st.text_input(
-                                        f"{field}:", 
-                                        value=st.session_state.local_fixo if st.session_state.fixar_local else "",
-                                        key=f"add_{to_col_name(field)}"
-                                    )
-                                with col2:
-                                    st.session_state.fixar_local = st.checkbox(
-                                        "Fixar", 
-                                        value=st.session_state.fixar_local,
-                                        key=f"fixar_{to_col_name(field)}",
-                                        help="Marque para usar este valor automaticamente nos próximos registros"
-                                    )
-                                    if st.session_state.fixar_local and entries[to_col_name(field)]:
-                                        st.session_state.local_fixo = entries[to_col_name(field)]
-                            elif field == "Tipo de Ato":
-                                entries[to_col_name(field)] = st.selectbox(
-                                    f"{field}:",
-                                    options=TIPOS_DE_ATO,
-                                    index=None,
-                                    placeholder="Selecione um tipo...",
-                                    key=f"add_{to_col_name(field)}"
+                            with col2:
+                                st.session_state.fixar_local = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_local,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
                                 )
-                            else:
+                                if st.session_state.fixar_local and entries[to_col_name(field)]:
+                                    st.session_state.local_fixo = entries[to_col_name(field)]
+                        elif field == "Tipo de Ato":
+                            entries[to_col_name(field)] = st.selectbox(
+                                f"{field}:",
+                                options=TIPOS_DE_ATO,
+                                index=None,
+                                placeholder="Selecione um tipo...",
+                                key=f"add_{to_col_name(field)}"
+                            )
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                key=f"add_{to_col_name(field)}"
+                            )
+
+                    # Campos dinâmicos para "Partes Envolvidas"
+                    st.markdown("#### Partes Envolvidas 👥")
+                    partes_envolvidas_inputs = []
+                    for i in range(st.session_state.get('num_partes', 2)):
+                        partes_envolvidas_inputs.append(
+                            st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}")
+                        )
+
+                    # Campos restantes após "Partes Envolvidas"
+                    st.markdown("---")
+                    for field in fields[partes_index+1:]:
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
                                 entries[to_col_name(field)] = st.text_input(
                                     f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
                                     key=f"add_{to_col_name(field)}"
                                 )
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                key=f"add_{to_col_name(field)}"
+                            )
 
                     submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
                     
                     if submitted:
-                        if record_type == "Notas" and "Partes Envolvidas" in fields:
-                            partes_values = [p.strip() for p in partes_envolvidas_inputs if p.strip()]
-                            entries['partes_envolvidas'] = "; ".join(partes_values)
+                        # Processar partes envolvidas
+                        partes_values = [p.strip() for p in partes_envolvidas_inputs if p.strip()]
+                        entries['partes_envolvidas'] = "; ".join(partes_values)
 
                         try:
                             with engine.connect() as conn:
@@ -687,6 +633,90 @@ def main_app():
                                 st.success("Registro adicionado com sucesso!")
                                 if 'num_partes' in st.session_state:
                                     del st.session_state.num_partes
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Ocorreu um erro ao salvar: {e}")
+            else:
+                # Para outros tipos de registro (sem partes envolvidas dinâmicas)
+                with st.form("new_record_form", clear_on_submit=True):
+                    entries = {}
+                    fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
+                    
+                    for field in fields:
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        elif field in ["Local do Evento", "Local do Registro"]:
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.local_fixo if st.session_state.fixar_local else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_local = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_local,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_local and entries[to_col_name(field)]:
+                                    st.session_state.local_fixo = entries[to_col_name(field)]
+                        elif field == "Tipo de Ato":
+                            entries[to_col_name(field)] = st.selectbox(
+                                f"{field}:",
+                                options=TIPOS_DE_ATO,
+                                index=None,
+                                placeholder="Selecione um tipo...",
+                                key=f"add_{to_col_name(field)}"
+                            )
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                key=f"add_{to_col_name(field)}"
+                            )
+
+                    submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
+                    
+                    if submitted:
+                        try:
+                            with engine.connect() as conn:
+                                now_utc = datetime.now(timezone.utc)
+                                
+                                cols = ["tipo_registro"] + list(entries.keys()) + ["criado_por", "ultima_alteracao_por", "criado_em", "atualizado_em"]
+                                vals = [record_type] + list(entries.values()) + [user_email, user_email, now_utc, now_utc]
+
+                                final_cols = []
+                                final_vals = []
+                                seen_cols = set()
+                                for c, v in zip(cols, vals):
+                                    if c not in seen_cols:
+                                        final_cols.append(c)
+                                        final_vals.append(v)
+                                        seen_cols.add(c)
+
+                                placeholders = ', '.join([f':{c}' for c in final_cols])
+                                query = f"INSERT INTO registros ({', '.join(final_cols)}) VALUES ({placeholders})"
+                                params = dict(zip(final_cols, final_vals))
+
+                                conn.execute(text(query), params)
+                                conn.commit()
+                                st.success("Registro adicionado com sucesso!")
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao salvar: {e}")
@@ -878,97 +908,73 @@ def main_app():
                         if 'edit_num_partes' not in st.session_state:
                             st.session_state.edit_num_partes = max(1, len(partes_list))
 
+                        # Controle dinâmico de partes envolvidas para edição
+                        st.markdown("### Configurar Partes Envolvidas (Edição)")
+                        col_info, col_btn1, col_btn2 = st.columns([2, 1, 1])
+                        with col_info:
+                            st.info(f"Atualmente configurado para {st.session_state.edit_num_partes} partes envolvidas")
+                        with col_btn1:
+                            if st.button("➕ Adicionar Parte", key="edit_add_parte_btn"):
+                                st.session_state.edit_num_partes += 1
+                                st.rerun()
+                        with col_btn2:
+                            if st.button("➖ Remover Última", key="edit_remove_parte_btn") and st.session_state.edit_num_partes > 1:
+                                st.session_state.edit_num_partes -= 1
+                                st.rerun()
+                        
+                        st.markdown("---")
+
                         with st.form("edit_record_form"):
                             st.info(f"Editando registro de {record_type}")
                             updated_entries = {}
                             fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
 
-                            # Verificar se "Partes Envolvidas" está nos campos (só existe em "Notas")
-                            if "Partes Envolvidas" in fields:
-                                # Renderizar campos até "Partes Envolvidas"
-                                partes_index = fields.index("Partes Envolvidas")
-                                for field in fields[:partes_index]:
-                                    col_name = to_col_name(field)
-                                    current_value = record.get(col_name, "")
-                                    
-                                    if field == "Tipo de Ato":
-                                        updated_entries[col_name] = st.selectbox(
-                                            f"{field}:",
-                                            options=TIPOS_DE_ATO,
-                                            index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
-                                            key=f"edit_{col_name}"
-                                        )
-                                    else:
-                                        updated_entries[col_name] = st.text_input(
-                                            f"{field}:", 
-                                            value=current_value, 
-                                            key=f"edit_{col_name}"
-                                        )
-
-                                # Filamento horizontal ANTES de "Partes Envolvidas"
-                                st.markdown("<hr>", unsafe_allow_html=True)
-
-                                # Renderizar bloco dinâmico de Partes Envolvidas
-                                edit_partes_inputs = []
+                            # Renderizar campos até "Partes Envolvidas"
+                            partes_index = fields.index("Partes Envolvidas")
+                            for field in fields[:partes_index]:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
                                 
-                                # Cria um container para o título e botões lado a lado
-                                partes_header = st.container()
-                                with partes_header:
-                                    col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
-                                    with col_title:
-                                        st.markdown("<h4 style='font-size:16px;'>Partes Envolvidas👥</h4>", unsafe_allow_html=True)
-                                    with col_btn1:
-                                        if st.button("➕ Adicionar Parte na Edição", key="edit_add_parte_btn"):
-                                            st.session_state.edit_num_partes += 1
-                                            st.rerun()
-                                    with col_btn2:
-                                        if st.button("➖ Remover Última Parte na Edição", key="edit_remove_parte_btn") and st.session_state.edit_num_partes > 1:
-                                            st.session_state.edit_num_partes -= 1
-                                            st.rerun()
-                                
-                                # Campos de entrada para as partes
-                                for i in range(st.session_state.get('edit_num_partes', 1)):
-                                    val = partes_list[i] if i < len(partes_list) else ""
-                                    edit_partes_inputs.append(st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}"))
-
-                                # Filamento horizontal DEPOIS de "Partes Envolvidas"
-                                st.markdown("<hr>", unsafe_allow_html=True)
-
-                                # Renderizar campos restantes após "Partes Envolvidas"
-                                for field in fields[partes_index+1:]:
-                                    col_name = to_col_name(field)
-                                    current_value = record.get(col_name, "")
+                                if field == "Tipo de Ato":
+                                    updated_entries[col_name] = st.selectbox(
+                                        f"{field}:",
+                                        options=TIPOS_DE_ATO,
+                                        index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
+                                        key=f"edit_{col_name}"
+                                    )
+                                else:
                                     updated_entries[col_name] = st.text_input(
                                         f"{field}:", 
                                         value=current_value, 
                                         key=f"edit_{col_name}"
                                     )
-                            else:
-                                # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
-                                for field in fields:
-                                    col_name = to_col_name(field)
-                                    current_value = record.get(col_name, "")
-                                    
-                                    if field == "Tipo de Ato":
-                                        updated_entries[col_name] = st.selectbox(
-                                            f"{field}:",
-                                            options=TIPOS_DE_ATO,
-                                            index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
-                                            key=f"edit_{col_name}"
-                                        )
-                                    else:
-                                        updated_entries[col_name] = st.text_input(
-                                            f"{field}:", 
-                                            value=current_value, 
-                                            key=f"edit_{col_name}"
-                                        )
+
+                            # Campos dinâmicos para "Partes Envolvidas"
+                            st.markdown("#### Partes Envolvidas 👥")
+                            edit_partes_inputs = []
+                            for i in range(st.session_state.get('edit_num_partes', 1)):
+                                val = partes_list[i] if i < len(partes_list) else ""
+                                edit_partes_inputs.append(
+                                    st.text_input(f"Parte Envolvida {i+1}", value=val, key=f"edit_parte_{i}")
+                                )
+
+                            # Campos restantes após "Partes Envolvidas"
+                            st.markdown("---")
+                            for field in fields[partes_index+1:]:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
+                                updated_entries[col_name] = st.text_input(
+                                    f"{field}:", 
+                                    value=current_value, 
+                                    key=f"edit_{col_name}"
+                                )
 
                             submitted = st.form_submit_button("Salvar Alterações")
                             
                             if submitted:
-                                if record_type == "Notas" and "Partes Envolvidas" in fields:
-                                    partes_values = [p.strip() for p in edit_partes_inputs if p.strip()]
-                                    updated_entries['partes_envolvidas'] = "; ".join(partes_values)
+                                # Processar partes envolvidas
+                                partes_values = [p.strip() for p in edit_partes_inputs if p.strip()]
+                                updated_entries['partes_envolvidas'] = "; ".join(partes_values)
 
                                 try:
                                     with engine.connect() as conn:
@@ -990,6 +996,56 @@ def main_app():
                                         del st.session_state.manage_action
                                         if 'edit_num_partes' in st.session_state: 
                                             del st.session_state.edit_num_partes
+                                        st.rerun()
+                                except Exception as e: 
+                                    st.error(f"Ocorreu um erro ao atualizar: {e}")
+                    else:
+                    else:
+                        # Para outros tipos de registro (sem partes envolvidas dinâmicas)
+                        with st.form("edit_record_form"):
+                            st.info(f"Editando registro de {record_type}")
+                            updated_entries = {}
+                            fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
+
+                            for field in fields:
+                                col_name = to_col_name(field)
+                                current_value = record.get(col_name, "")
+                                
+                                if field == "Tipo de Ato":
+                                    updated_entries[col_name] = st.selectbox(
+                                        f"{field}:",
+                                        options=TIPOS_DE_ATO,
+                                        index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
+                                        key=f"edit_{col_name}"
+                                    )
+                                else:
+                                    updated_entries[col_name] = st.text_input(
+                                        f"{field}:", 
+                                        value=current_value, 
+                                        key=f"edit_{col_name}"
+                                    )
+
+                            submitted = st.form_submit_button("Salvar Alterações")
+                            
+                            if submitted:
+                                try:
+                                    with engine.connect() as conn:
+                                        now_utc = datetime.now(timezone.utc)
+                                        
+                                        set_clause = ", ".join([f"{col} = :{col}" for col in updated_entries.keys()])
+                                        set_clause += ", ultima_alteracao_por = :user_email, atualizado_em = :now_utc"
+                                        
+                                        query = text(f"UPDATE registros SET {set_clause} WHERE id = :id")
+                                        
+                                        params = updated_entries
+                                        params['id'] = record_id
+                                        params['user_email'] = user_email
+                                        params['now_utc'] = now_utc
+                                        
+                                        conn.execute(query, params)
+                                        conn.commit()
+                                        st.success("Registro atualizado com sucesso!")
+                                        del st.session_state.manage_action
                                         st.rerun()
                                 except Exception as e: 
                                     st.error(f"Ocorreu um erro ao atualizar: {e}")
