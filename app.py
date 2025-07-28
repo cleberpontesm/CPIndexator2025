@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL COM CATEGORIA "NOTAS" DINÂMICA - CPIndexator com Supabase DB e Autenticação
+# app.py - VERSÃO FINAL COM CHECKBOXES PARA PREENCHIMENTO AUTOMÁTICO
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -27,7 +27,7 @@ FORM_DEFINITIONS = {
     "Nascimento/Batismo": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Registrado", "Nome do Pai", "Nome da Mãe", "Padrinhos", "Avô paterno", "Avó paterna", "Avô materno", "Avó materna"],
     "Casamento": ["Data do Registro", "Data do Evento", "Local do Evento", "Nome do Noivo", "Idade do Noivo", "Pai do Noivo", "Mãe do Noivo", "Nome da Noiva", "Idade da Noiva", "Pai da Noiva", "Mãe da Noiva", "Testemunhas"],
     "Óbito": ["Data do Registro", "Data do Óbito", "Local do Óbito", "Nome do Falecido", "Idade no Óbito", "Filiação", "Cônjuge Sobrevivente", "Deixou Filhos?", "Causa Mortis", "Local do Sepultamento"],
-    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Partes Envolvidas", "Resumo do Teor"]  # Ordem ajustada aqui
+    "Notas": ["Tipo de Ato", "Data do Registro", "Local do Registro", "Partes Envolvidas", "Resumo do Teor"]
 }
 COMMON_FIELDS = ["Fonte (Livro)", "Fonte (Página/Folha)", "Observações", "Caminho da Imagem"]
 
@@ -472,14 +472,16 @@ def main_app():
 
     with tab_add:
         st.header("Adicionar Novo Registro")
-        all_books = get_distinct_values("fonte_livro")
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
-
-        col1, col2 = st.columns(2)
-        with col1:
-            book_preset = st.selectbox("[Após a primeira adição] Preencher 'Fonte (Livro)' com:", [""] + all_books, key="book_preset_add")
-        with col2:
-            location_preset = st.selectbox("[Após a primeira adição] Preencher 'Local' com:", [""] + all_locations, key="location_preset_add")
+        
+        # Inicializa as variáveis de sessão para os checkboxes
+        if 'fixar_livro' not in st.session_state:
+            st.session_state.fixar_livro = False
+        if 'fixar_local' not in st.session_state:
+            st.session_state.fixar_local = False
+        if 'livro_fixo' not in st.session_state:
+            st.session_state.livro_fixo = ""
+        if 'local_fixo' not in st.session_state:
+            st.session_state.local_fixo = ""
 
         record_type = st.selectbox("Tipo de Registro:", list(FORM_DEFINITIONS.keys()), index=None, placeholder="Selecione...")
 
@@ -515,13 +517,41 @@ def main_app():
                     # Renderizar campos até "Partes Envolvidas"
                     partes_index = fields.index("Partes Envolvidas")
                     for field in fields[:partes_index]:
-                        default_value = ""
-                        if field == "Fonte (Livro)" and book_preset: 
-                            default_value = book_preset
-                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
-                            default_value = location_preset
-                        
-                        if field == "Tipo de Ato":
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        elif field in ["Local do Evento", "Local do Registro"]:
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.local_fixo if st.session_state.fixar_local else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_local = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_local,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_local and entries[to_col_name(field)]:
+                                    st.session_state.local_fixo = entries[to_col_name(field)]
+                        elif field == "Tipo de Ato":
                             entries[to_col_name(field)] = st.selectbox(
                                 f"{field}:",
                                 options=TIPOS_DE_ATO,
@@ -532,7 +562,6 @@ def main_app():
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
-                                value=default_value, 
                                 key=f"add_{to_col_name(field)}"
                             )
 
@@ -550,26 +579,66 @@ def main_app():
 
                     # Renderizar campos restantes (a partir do campo após "Partes Envolvidas")
                     for field in fields[partes_index+1:]:
-                        default_value = ""
-                        if field == "Fonte (Livro)" and book_preset: 
-                            default_value = book_preset
-                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
-                            default_value = location_preset
-                        entries[to_col_name(field)] = st.text_input(
-                            f"{field}:", 
-                            value=default_value, 
-                            key=f"add_{to_col_name(field)}"
-                        )
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                key=f"add_{to_col_name(field)}"
+                            )
                 else:
                     # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
                     for field in fields:
-                        default_value = ""
-                        if field == "Fonte (Livro)" and book_preset: 
-                            default_value = book_preset
-                        elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
-                            default_value = location_preset
-                        
-                        if field == "Tipo de Ato":
+                        if field == "Fonte (Livro)":
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.livro_fixo if st.session_state.fixar_livro else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_livro = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_livro,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_livro and entries[to_col_name(field)]:
+                                    st.session_state.livro_fixo = entries[to_col_name(field)]
+                        elif field in ["Local do Evento", "Local do Registro"]:
+                            col1, col2 = st.columns([4, 1])
+                            with col1:
+                                entries[to_col_name(field)] = st.text_input(
+                                    f"{field}:", 
+                                    value=st.session_state.local_fixo if st.session_state.fixar_local else "",
+                                    key=f"add_{to_col_name(field)}"
+                                )
+                            with col2:
+                                st.session_state.fixar_local = st.checkbox(
+                                    "Fixar", 
+                                    value=st.session_state.fixar_local,
+                                    key=f"fixar_{to_col_name(field)}",
+                                    help="Marque para usar este valor automaticamente nos próximos registros"
+                                )
+                                if st.session_state.fixar_local and entries[to_col_name(field)]:
+                                    st.session_state.local_fixo = entries[to_col_name(field)]
+                        elif field == "Tipo de Ato":
                             entries[to_col_name(field)] = st.selectbox(
                                 f"{field}:",
                                 options=TIPOS_DE_ATO,
@@ -580,7 +649,6 @@ def main_app():
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
-                                value=default_value, 
                                 key=f"add_{to_col_name(field)}"
                             )
 
