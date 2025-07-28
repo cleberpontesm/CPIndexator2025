@@ -473,7 +473,7 @@ def main_app():
     with tab_add:
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
 
         col1, col2 = st.columns(2)
         with col1:
