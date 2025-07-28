@@ -214,8 +214,8 @@ def formatar_timestamp_para_exibicao(ts):
 
 def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_birth_parents=False, show_marriage_info=False, show_grandparents=False):
     # Nomes de exibição exatos como definidos em COLUMN_LABELS
-    base_display_cols = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página']
-    meta_display_cols = ['Criado Por', 'Criado Em', 'Última Alteração Por', 'Atualizado Em']
+    base_display_cols = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte']
+    meta_display_cols = ['Folha/Página', 'Criado Por', 'Criado Em', 'Última Alteração Por', 'Atualizado Em']
 
     # Colunas opcionais que podem ser adicionadas
     optional_display_cols = []
