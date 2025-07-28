@@ -508,6 +508,9 @@ def main_app():
     tab_add, tab_manage, tab_export = created_tabs[0], created_tabs[1], created_tabs[2]
     if is_admin: tab_admin = created_tabs[3]
 
+    # ... (o código para tab_add, tab_manage, e tab_export permanece o mesmo) ...
+    # ... (vou omiti-los aqui para focar na mudança, mas eles não mudam) ...
+
     with tab_add:
         st.header("Adicionar Novo Registro")
         
@@ -792,7 +795,7 @@ def main_app():
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao salvar: {e}")
-
+                            
     with tab_manage:
         st.header("Consultar Registros")
         st.sidebar.header("Filtros de Consulta")
@@ -1245,14 +1248,17 @@ def main_app():
         else: 
             st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
 
+
+    # --- INÍCIO DA SEÇÃO MODIFICADA ---
     if is_admin:
         with tab_admin:
             st.header("⚙️ Administração do Banco de Dados")
             st.markdown("---")
             
             st.subheader("Alimentar Banco de Dados com Excel")
-            st.info("Esta função permite adicionar múltiplos registros de uma vez a partir de uma planilha, sem apagar os dados existentes.")
+            st.info("Esta função permite adicionar múltiplos registros de um arquivo, definindo um Livro Fonte único para todos eles.")
 
+            # Passo 1: Selecionar o tipo de registro
             record_type_upload = st.selectbox(
                 "1. Selecione o Tipo de Registro para o upload:",
                 list(FORM_DEFINITIONS.keys()),
@@ -1261,48 +1267,67 @@ def main_app():
                 key="upload_record_type"
             )
 
+            # Passo 2: Fornecer o nome do livro fonte (NOVO CAMPO)
+            book_source_upload = st.text_input(
+                "2. Informe o Nome do Livro Fonte para este arquivo:",
+                placeholder="Ex: Livro de Batismos 1880-1890",
+                key="upload_book_source"
+            )
+
+            # Passo 3: Fazer o upload do arquivo
             uploaded_excel_file = st.file_uploader(
-                "2. Escolha um arquivo Excel (.xlsx)",
+                "3. Escolha um arquivo Excel (.xlsx)",
                 type="xlsx",
                 key="excel_uploader"
             )
 
-            if uploaded_excel_file is not None:
-                if record_type_upload:
-                    if st.button("Iniciar Importação do Excel", type="primary"):
-                        try:
-                            df = pd.read_excel(uploaded_excel_file, dtype=str).fillna('')
-                            st.write("Pré-visualização dos dados carregados:", df.head())
+            if st.button("Iniciar Importação do Excel", type="primary"):
+                # Validação Crítica: Verificar se todos os campos foram preenchidos
+                book_name = book_source_upload.strip()
+                if not record_type_upload or not book_name or not uploaded_excel_file:
+                    st.error("Erro: Todos os três campos (Tipo de Registro, Nome do Livro e Arquivo) são obrigatórios.")
+                    st.stop() # Interrompe a execução
 
-                            # Renomeia as colunas do Excel para o formato do banco de dados
-                            original_columns = df.columns.tolist()
-                            column_mapping = {col: to_col_name(col) for col in original_columns}
-                            df.rename(columns=column_mapping, inplace=True)
+                try:
+                    df = pd.read_excel(uploaded_excel_file, dtype=str).fillna('')
+                    
+                    # Renomeia as colunas do Excel para o formato do banco de dados
+                    original_columns = df.columns.tolist()
+                    column_mapping = {col: to_col_name(col) for col in original_columns}
+                    df.rename(columns=column_mapping, inplace=True)
 
-                            # Adiciona as colunas de metadados
-                            now_utc = datetime.now(timezone.utc)
-                            df['tipo_registro'] = record_type_upload
-                            df['criado_em'] = now_utc
-                            df['atualizado_em'] = now_utc
-                            df['criado_por'] = user_email
-                            df['ultima_alteracao_por'] = user_email
-                            
-                            # Salva os novos registros no banco de dados (modo 'append')
-                            with engine.connect() as conn:
-                                with conn.begin(): # Usando uma transação
-                                    df.to_sql('registros', conn, if_exists='append', index=False)
-                            
-                            st.success(f"Importação concluída com sucesso! {len(df)} novos registros foram adicionados.")
-                            st.balloons()
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            st.rerun()
+                    # Atribuição Forçada do Livro Fonte (A LÓGICA CHAVE)
+                    # Cria ou substitui a coluna 'fonte_livro' com o valor da interface.
+                    df['fonte_livro'] = book_name
 
-                        except Exception as e:
-                            st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
-                            st.warning("Verifique se os nomes das colunas no arquivo Excel correspondem exatamente aos campos dos formulários do sistema.")
-                else:
-                    st.error("Por favor, selecione o 'Tipo de Registro' antes de iniciar a importação.")
+                    st.write("Pré-visualização dos dados a serem importados (Livro Fonte atribuído):", df.head())
+
+                    # Adiciona as colunas de metadados
+                    now_utc = datetime.now(timezone.utc)
+                    df['tipo_registro'] = record_type_upload
+                    df['criado_em'] = now_utc
+                    df['atualizado_em'] = now_utc
+                    df['criado_por'] = user_email
+                    df['ultima_alteracao_por'] = user_email
+                    
+                    # Remove colunas que não existem na tabela de destino para evitar erros
+                    db_cols = get_table_columns()
+                    df_filtered = df[[col for col in df.columns if col in db_cols]]
+
+                    # Salva os novos registros no banco de dados (modo 'append')
+                    with engine.connect() as conn:
+                        with conn.begin(): # Usando uma transação
+                            df_filtered.to_sql('registros', conn, if_exists='append', index=False)
+                    
+                    st.success(f"Importação concluída com sucesso! {len(df_filtered)} novos registros foram adicionados ao livro '{book_name}'.")
+                    st.balloons()
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
+                    st.warning("Verifique se as colunas no arquivo Excel (exceto 'Fonte (Livro)') correspondem aos campos do formulário.")
             
             st.markdown("---")
             st.subheader("Gerenciar Livros")
