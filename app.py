@@ -919,7 +919,7 @@ def main_app():
         else:
             import time
             start_time = time.time()
-            df_records = fetch_records(search_term, selected_books_manage, search_categories, pagina_filter, show_parents=show_parents, show_grandparents=show_grandparents)
+            df_records = fetch_records(search_term, selected_books_manage, search_categories, pagina_filter, show_birth_parents=show_birth_parents, show_marriage_info=show_marriage_info, show_grandparents=show_grandparents)
             search_time = time.time() - start_time
             
             if not df_records.empty:
