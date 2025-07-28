@@ -214,8 +214,8 @@ def formatar_timestamp_para_exibicao(ts):
 
 def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_birth_parents=False, show_marriage_info=False, show_grandparents=False):
     # Nomes de exibição exatos como definidos em COLUMN_LABELS
-    base_display_cols = ['ID', 'Tipo', 'Data', 'Nome Principal', 'Livro Fonte']
-    meta_display_cols = ['Folha/Página', 'Criado Por', 'Criado Em', 'Última Alteração Por', 'Atualizado Em']
+    base_display_cols = ['ID', 'Tipo de Registro', 'Data', 'Nome Principal', 'Fonte (Livro)']
+    meta_display_cols = ['Fonte (Página/Folha)', 'Criado Por', 'Criado Em', 'Última Alteração Por', 'Atualizado Em']
 
     # Colunas opcionais que podem ser adicionadas
     optional_display_cols = []
@@ -291,8 +291,7 @@ def fetch_records(search_term="", selected_books=None, search_categories=None, p
                     lambda row: row.get('data_do_evento') or row.get('data_do_obito') or row.get('data_do_registro'),
                     axis=1
                 )
-                df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
-
+                
                 # 2. Renomeia TODAS as colunas do banco para os nomes de exibição
                 df.rename(columns=COLUMN_LABELS, inplace=True)
 
@@ -932,8 +931,8 @@ def main_app():
                 else:
                     st.info(f"📊 Exibindo **{total_results}** registros dos livros selecionados ⏱️ ({search_time:.2f}s)")
                 
-                if 'Tipo' in df_records.columns:
-                    tipo_counts = df_records['Tipo'].value_counts()
+                if 'Tipo de Registro' in df_records.columns:
+                    tipo_counts = df_records['Tipo de Registro'].value_counts()
                     stats_text = " | ".join([f"{tipo}: {count}" for tipo, count in tipo_counts.items()])
                     st.caption(f"📈 Distribuição por tipo: {stats_text}")
                     
@@ -1203,50 +1202,87 @@ def main_app():
                                 st.rerun()
                         except Exception as e: 
                             st.error(f"Erro ao excluir: {e}")
-
+            
+            # --- INÍCIO DO BLOCO CORRIGIDO ---
             st.markdown("---")
             st.subheader("Excluir Múltiplos Registros")
             st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
-            
-            ids_to_delete = st.text_input(
-                "IDs para excluir (separados por vírgula):",
-                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
-            )
-            
-                    if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
-    if not ids_to_delete:
-        st.error("Por favor, insira pelo menos um ID para excluir.")
-    else:
-        try:
-            # ... processamento dos IDs ...
-            if not id_list:
-                st.error("Nenhum ID válido encontrado.")
-            else:
-                # O problema começa aqui. O código dentro deste expander
-                # só aparece DEPOIS que o botão acima é clicado e a página recarrega.
-                with st.expander("CONFIRMAR EXCLUSÃO MÚLTIPLA", expanded=True):
-                    st.warning(...)
-                    confirm = st.checkbox(...) # Este checkbox é recriado a cada execução
 
-                    # Este botão depende do estado do checkbox
-                    if st.button("EXCLUIR AGORA", disabled=not confirm):
-                        # ... lógica de exclusão ...
-                        st.rerun() # Este rerun finaliza o processo
-        except Exception as e:
-            st.error(f"Erro ao processar IDs: {e}")
-                                            # Executando a exclusão em uma transação
-                                            with conn.begin():
-                                                for record_id in id_list:
-                                                    conn.execute(text("DELETE FROM registros WHERE id = :id_val"), {"id_val": record_id})
-                                        
-                                        st.success(f"{len(id_list)} registros excluídos com sucesso!")
-                                        st.cache_data.clear()
-                                        st.cache_resource.clear()
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Erro durante a exclusão: {e}")
+            # Inicializa o estado de controle no session_state
+            if 'pending_multi_delete' not in st.session_state:
+                st.session_state.pending_multi_delete = False
+            if 'ids_to_delete_list' not in st.session_state:
+                st.session_state.ids_to_delete_list = []
+
+            ids_to_delete_input = st.text_input(
+                "IDs para excluir (separados por vírgula):",
+                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789",
+                key="multi_delete_input"
+            )
+
+            # Botão principal para INICIAR o processo de exclusão
+            if st.button("Revisar para Exclusão Múltipla", key="review_delete_multiple_btn"):
+                if not ids_to_delete_input:
+                    st.error("Por favor, insira pelo menos um ID para excluir.")
+                    st.session_state.pending_multi_delete = False # Garante que o estado seja falso
+                else:
+                    try:
+                        id_list = [int(id_val.strip()) for id_val in ids_to_delete_input.split(",") if id_val.strip().isdigit()]
+                        
+                        if not id_list:
+                            st.error("Nenhum ID numérico válido foi encontrado na sua entrada.")
+                            st.session_state.pending_multi_delete = False # Garante que o estado seja falso
+                        else:
+                            # ATIVA o modo de confirmação e salva a lista de IDs
+                            st.session_state.pending_multi_delete = True
+                            st.session_state.ids_to_delete_list = id_list
+                            st.rerun() # Força um rerun para mostrar o painel de confirmação
+
                     except Exception as e:
-                        st.error(f"Erro ao processar IDs: {e}")
+                        st.error(f"Erro ao processar os IDs: {e}")
+                        st.session_state.pending_multi_delete = False
+
+
+            # Painel de confirmação que aparece SOMENTE se o estado 'pending_multi_delete' for True
+            if st.session_state.get('pending_multi_delete', False):
+                with st.expander("CONFIRMAR EXCLUSÃO MÚLTIPLA", expanded=True):
+                    st.warning(f"Você está prestes a excluir {len(st.session_state.ids_to_delete_list)} registros. Esta ação é irreversível.")
+                    
+                    # O checkbox de confirmação
+                    confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, st.session_state.ids_to_delete_list))}")
+                    
+                    col_confirm, col_cancel = st.columns(2)
+
+                    with col_confirm:
+                        # O botão de exclusão final agora funciona, pois seu estado depende do checkbox na mesma execução
+                        if st.button("EXCLUIR AGORA", disabled=not confirm, type="primary"):
+                            try:
+                                with engine.connect() as conn:
+                                    with conn.begin(): # Transação para segurança
+                                        for record_id in st.session_state.ids_to_delete_list:
+                                            conn.execute(text("DELETE FROM registros WHERE id = :id_val"), {"id_val": record_id})
+                                
+                                st.success(f"{len(st.session_state.ids_to_delete_list)} registros excluídos com sucesso!")
+                                st.balloons()
+                                
+                                # Limpa os estados e recarrega a página
+                                st.session_state.pending_multi_delete = False
+                                st.session_state.ids_to_delete_list = []
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
+                                st.rerun()
+
+                            except Exception as e:
+                                st.error(f"Erro durante a exclusão final: {e}")
+
+                    with col_cancel:
+                        # Botão para cancelar a operação
+                        if st.button("Cancelar"):
+                            st.session_state.pending_multi_delete = False
+                            st.session_state.ids_to_delete_list = []
+                            st.rerun()
+            # --- FIM DO BLOCO CORRIGIDO ---
+
 
     elif st.session_state.active_tab == "📤 Exportar Dados":
         st.header("Exportar Dados")
