@@ -1,4 +1,4 @@
-# app.py - VERSÃO FINAL COM CHECKBOXES PARA PREENCHIMENTO AUTOMÁTICO - CORRIGIDA E REORDENADA
+# app.py - VERSÃO FINAL COM CHECKBOXES PARA PREENCHIMENTO AUTOMÁTICO - CORRIGIDA
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -283,9 +283,9 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
 
                 # Aplica a formatação de timestamp
                 if 'criado_em' in df.columns:
-                    df['criado_em'] = pd.to_datetime(df['criado_em']).apply(formatar_timestamp_para_exibicao)
+                    df['criado_em'] = df['criado_em'].apply(formatar_timestamp_para_exibicao)
                 if 'atualizado_em' in df.columns:
-                    df['atualizado_em'] = pd.to_datetime(df['atualizado_em']).apply(formatar_timestamp_para_exibicao)
+                    df['atualizado_em'] = df['atualizado_em'].apply(formatar_timestamp_para_exibicao)
                 
                 # Define as colunas a serem exibidas na ordem desejada
                 columns_to_show = [
@@ -410,7 +410,7 @@ def generate_pdf_detailed(records_by_type):
                         if field in ['criado_por', 'ultima_alteracao_por']:
                             value = formatar_email_para_exibicao(value)
                         elif field in ['criado_em', 'atualizado_em']:
-                            value = formatar_timestamp_para_exibicao(pd.to_datetime(record[field]))
+                            value = formatar_timestamp_para_exibicao(record[field])
                         elif field == 'partes_envolvidas':
                             value = value.replace(';', '<br/>- ')
                             value = f"- {value}"
@@ -516,18 +516,9 @@ def main_app():
                 with st.form("new_record_form", clear_on_submit=True):
                     entries = {}
                     fields = FORM_DEFINITIONS.get(record_type, []) + COMMON_FIELDS
+                    
+                    # Renderizar campos até "Partes Envolvidas"
                     partes_index = fields.index("Partes Envolvidas")
-
-                    # MODIFICAÇÃO: Bloco de Partes Envolvidas movido para o topo do formulário
-                    st.markdown("#### Partes Envolvidas 👥")
-                    partes_envolvidas_inputs = []
-                    for i in range(st.session_state.get('num_partes', 2)):
-                        partes_envolvidas_inputs.append(
-                            st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}")
-                        )
-                    st.markdown("---")
-
-                    # Renderizar campos que originalmente vinham antes
                     for field in fields[:partes_index]:
                         if field == "Fonte (Livro)":
                             col1, col2 = st.columns([4, 1])
@@ -577,7 +568,16 @@ def main_app():
                                 key=f"add_{to_col_name(field)}"
                             )
 
+                    # Campos dinâmicos para "Partes Envolvidas"
+                    st.markdown("#### Partes Envolvidas 👥")
+                    partes_envolvidas_inputs = []
+                    for i in range(st.session_state.get('num_partes', 2)):
+                        partes_envolvidas_inputs.append(
+                            st.text_input(f"Parte Envolvida {i+1}", key=f"add_parte_{i}")
+                        )
+
                     # Campos restantes após "Partes Envolvidas"
+                    st.markdown("---")
                     for field in fields[partes_index+1:]:
                         if field == "Fonte (Livro)":
                             col1, col2 = st.columns([4, 1])
@@ -745,7 +745,7 @@ def main_app():
                     }
                 </style>
                 """, unsafe_allow_html=True)
-                        
+                    
             selected_books_manage = st.sidebar.multiselect(
                 "Filtrar por Livro(s):", 
                 all_books_manage, 
@@ -890,7 +890,7 @@ def main_app():
                             if key in ['criado_por', 'ultima_alteracao_por']:
                                 display_value = formatar_email_para_exibicao(value)
                             elif key in ['criado_em', 'atualizado_em']:
-                                display_value = formatar_timestamp_para_exibicao(pd.to_datetime(value))
+                                display_value = formatar_timestamp_para_exibicao(value)
                             elif key == 'partes_envolvidas':
                                 display_value = str(value).replace(';', ' | ')
                             
