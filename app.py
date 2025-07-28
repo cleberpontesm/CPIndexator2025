@@ -213,16 +213,25 @@ def formatar_timestamp_para_exibicao(ts):
         return str(ts)
 
 def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_parents=False, show_grandparents=False):
+    # Define as colunas base que sempre aparecem
     base_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página']
+    
+    # Adiciona colunas opcionais com base nos checkboxes
+    optional_columns = []
     if show_parents:
-        base_columns.extend(['Nome do Pai', 'Nome da Mãe'])
+        # Para casamentos, adicionamos todos os nomes relevantes
+        optional_columns.extend(['Nome da Noiva', 'Pai do Noivo', 'Mãe do Noivo', 'Pai da Noiva', 'Mãe da Noiva'])
+        # Para nascimentos, usamos as colunas genéricas que já existem
+        optional_columns.extend(['Nome do Pai', 'Nome da Mãe'])
     if show_grandparents:
-        base_columns.extend(['Avô Paterno', 'Avó Paterna', 'Avô Materno', 'Avó Materna'])
+        optional_columns.extend(['Avô Paterno', 'Avó Paterna', 'Avô Materno', 'Avó Materna'])
+
     meta_columns = ['Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
-    new_columns = base_columns + meta_columns
+    # Monta a lista final de colunas para o DataFrame vazio
+    all_possible_cols = base_columns + list(dict.fromkeys(optional_columns)) + meta_columns
 
     if not selected_books:
-        return pd.DataFrame(columns=new_columns)
+        return pd.DataFrame(columns=all_possible_cols)
 
     try:
         with engine.connect() as conn:
@@ -233,30 +242,23 @@ def fetch_records(search_term="", selected_books=None, search_categories=None, p
                 base_query += " AND CAST(fonte_pagina_folha AS TEXT) ILIKE :pagina"
                 params['pagina'] = f'%{pagina_filter}%'
 
-            # Ordenação robusta que trata strings com números (ex: '10v' > '9')
             order_clause = " ORDER BY fonte_livro, NULLIF(regexp_replace(fonte_pagina_folha, '[^0-9].*$', ''), '')::integer NULLS LAST, fonte_pagina_folha"
 
             if search_term:
-                if search_categories and len(search_categories) > 0:
-                    search_fields = []
+                # (A lógica de busca avançada permanece a mesma)
+                search_fields = []
+                if search_categories:
                     for category in search_categories:
                         if category in SEARCH_CATEGORIES:
                             search_fields.extend(SEARCH_CATEGORIES[category])
                     search_fields = list(set(search_fields))
                 else:
-                    search_fields = []
                     for fields_list in SEARCH_CATEGORIES.values():
                         search_fields.extend(fields_list)
-                    search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por', 'criado_em', 'atualizado_em'])
+                    search_fields.extend(['id', 'criado_por', 'ultima_alteracao_por'])
                     search_fields = list(set(search_fields))
-
-                search_conditions = []
-                for field in search_fields:
-                    if field == 'id':
-                        search_conditions.append(f"CAST({field} AS TEXT) ILIKE :search_term")
-                    else:
-                        search_conditions.append(f"COALESCE({field}, '') ILIKE :search_term")
                 
+                search_conditions = [f"COALESCE(CAST({field} AS TEXT), '') ILIKE :search_term" for field in search_fields]
                 if search_conditions:
                     search_logic = f" AND ({' OR '.join(search_conditions)})"
                     query = base_query + search_logic + order_clause
@@ -272,68 +274,69 @@ def fetch_records(search_term="", selected_books=None, search_categories=None, p
             if not df.empty:
                 df.columns = result.keys()
 
-                df['Nome Principal'] = 'N/A'
-                if 'nome_do_registrado' in df.columns:
-                    df.loc[df['tipo_registro'] == 'Nascimento/Batismo', 'Nome Principal'] = df['nome_do_registrado']
-                if 'nome_do_noivo' in df.columns:
-                    df.loc[df['tipo_registro'] == 'Casamento', 'Nome Principal'] = df['nome_do_noivo']
-                if 'nome_do_falecido' in df.columns:
-                    df.loc[df['tipo_registro'] == 'Óbito', 'Nome Principal'] = df['nome_do_falecido']
-                if 'partes_envolvidas' in df.columns:
-                    df.loc[df['tipo_registro'] == 'Notas', 'Nome Principal'] = df['partes_envolvidas'].str.split(';').str[0].fillna('N/A')
-
-                df['Data'] = 'N/A'
-                if 'data_do_evento' in df.columns:
-                    df.loc[df['data_do_evento'].notna(), 'Data'] = df['data_do_evento']
-                if 'data_do_obito' in df.columns:
-                    df.loc[df['data_do_obito'].notna(), 'Data'] = df['data_do_obito']
-                if 'data_do_registro' in df.columns:
-                    df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
-
-                # Adicione a coluna de folha/página
-                if 'fonte_pagina_folha' in df.columns:
-                    df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
-                else:
-                    df['Folha/Página'] = 'N/A'
-
-
-                # Aplica a formatação de email
-                if 'criado_por' in df.columns:
-                    df['criado_por'] = df['criado_por'].apply(formatar_email_para_exibicao)
-                if 'ultima_alteracao_por' in df.columns:
-                    df['ultima_alteracao_por'] = df['ultima_alteracao_por'].apply(formatar_email_para_exibicao)
-
-                # Aplica a formatação de timestamp
-                if 'criado_em' in df.columns:
-                    df['criado_em'] = pd.to_datetime(df['criado_em'], errors='coerce')
-                    df['criado_em'] = df['criado_em'].apply(formatar_timestamp_para_exibicao)
-                if 'atualizado_em' in df.columns:
-                    df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce')
-                    df['atualizado_em'] = df['atualizado_em'].apply(formatar_timestamp_para_exibicao)
+                # --- LÓGICA DE PREENCHIMENTO DAS COLUNAS ---
                 
-                # Define as colunas a serem exibidas na ordem desejada
-                columns_to_show = [
-                    'id', 'tipo_registro', 'Nome Principal', 'Data'
-                ]
+                # Nomes Principais (Noivo para Casamento)
+                df['Nome Principal'] = df.apply(
+                    lambda row: row['nome_do_noivo'] if row['tipo_registro'] == 'Casamento' else
+                                row['nome_do_registrado'] if row['tipo_registro'] == 'Nascimento/Batismo' else
+                                row['nome_do_falecido'] if row['tipo_registro'] == 'Óbito' else
+                                str(row.get('partes_envolvidas', 'N/A')).split(';')[0],
+                    axis=1
+                )
+
+                # Datas
+                df['Data'] = df.apply(
+                    lambda row: row.get('data_do_evento') or row.get('data_do_obito') or row.get('data_do_registro'),
+                    axis=1
+                )
+                
+                df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
+
+                # Renomeia colunas do DB para os nomes de exibição
+                df.rename(columns=COLUMN_LABELS, inplace=True)
+                
+                # Colunas a serem exibidas na tabela final
+                final_columns_to_show = base_columns.copy()
+
+                # Adiciona as colunas de pais/noiva se o checkbox estiver ativo
                 if show_parents:
-                    columns_to_show.extend(['nome_do_pai', 'nome_da_mae'])
+                    # Garante que as colunas existam antes de adicioná-las à lista final
+                    if 'Nome da Noiva' in df.columns: final_columns_to_show.append('Nome da Noiva')
+                    if 'Pai do Noivo' in df.columns: final_columns_to_show.append('Pai do Noivo')
+                    if 'Mãe do Noivo' in df.columns: final_columns_to_show.append('Mãe do Noivo')
+                    if 'Pai da Noiva' in df.columns: final_columns_to_show.append('Pai da Noiva')
+                    if 'Mãe da Noiva' in df.columns: final_columns_to_show.append('Mãe da Noiva')
+                    # Adiciona pais de nascimento (se a coluna existir)
+                    if 'Nome do Pai' in df.columns: final_columns_to_show.append('Nome do Pai')
+                    if 'Nome da Mãe' in df.columns: final_columns_to_show.append('Nome da Mãe')
+
                 if show_grandparents:
-                    columns_to_show.extend(['avo_paterno', 'avo_paterna', 'avo_materno', 'avo_materna'])
+                    if 'Avô Paterno' in df.columns: final_columns_to_show.append('Avô Paterno')
+                    if 'Avó Paterna' in df.columns: final_columns_to_show.append('Avó Paterna')
+                    if 'Avô Materno' in df.columns: final_columns_to_show.append('Avô Materno')
+                    if 'Avó Materna' in df.columns: final_columns_to_show.append('Avó Materna')
+
+                final_columns_to_show.extend(meta_columns)
                 
-                columns_to_show.extend([
-                    'fonte_livro', 'Folha/Página',
-                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
-                ])
+                # Formatação de campos de metadados
+                if 'Criado Por' in df.columns: df['Criado Por'] = df['Criado Por'].apply(formatar_email_para_exibicao)
+                if 'Alterado Por' in df.columns: df['Alterado Por'] = df['Alterado Por'].apply(formatar_email_para_exibicao)
+                if 'Criado Em' in df.columns: df['Criado Em'] = pd.to_datetime(df['Criado Em'], errors='coerce').apply(formatar_timestamp_para_exibicao)
+                if 'Alterado Em' in df.columns: df['Alterado Em'] = pd.to_datetime(df['Alterado Em'], errors='coerce').apply(formatar_timestamp_para_exibicao)
+
+                # Filtra o DataFrame final para conter apenas as colunas desejadas e na ordem correta
+                # Usamos list(dict.fromkeys(...)) para remover duplicatas e manter a ordem
+                existing_cols = [col for col in list(dict.fromkeys(final_columns_to_show)) if col in df.columns]
                 
-                final_cols = [col for col in columns_to_show if col in df.columns or col in ['Nome Principal', 'Data', 'Folha/Página']]
-                return df[final_cols].rename(columns=COLUMN_LABELS)
+                return df[existing_cols]
             else:
-                return pd.DataFrame(columns=new_columns)
+                return pd.DataFrame(columns=all_possible_cols)
 
     except Exception as e:
         st.error(f"Erro ao buscar registros: {str(e)}")
-        st.info("Verifique se a estrutura do banco de dados está correta (executou o ALTER TABLE?).")
-        return pd.DataFrame(columns=new_columns)
+        st.info("Verifique se a estrutura do banco de dados está correta.")
+        return pd.DataFrame(columns=all_possible_cols)
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
