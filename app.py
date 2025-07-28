@@ -84,6 +84,26 @@ COLUMN_LABELS = {
     'atualizado_em': 'Atualizado Em'
 }
 
+# Lista de tipos de ato pré-definidos
+TIPOS_DE_ATO = [
+    "Procuração Pública",
+    "Testamento",
+    "Escritura de Compra e Venda",
+    "Escritura Compra e Venda de Escravos",
+    "Escritura de Dote",
+    "Escritura de Emancipação",
+    "Escritura de Doação",
+    "Escritura de Permuta",
+    "Escritura de Dação em Pagamento",
+    "Escritura de Usufruto",
+    "Escritura Declaratória",
+    "Escritura de Cessão de Direitos Hereditários",
+    "Interdição",
+    "Tutela",
+    "Curatela",
+    "Outros"
+]
+
 TABLE_COLUMNS = {
     "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_registro', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'fonte_livro', 'fonte_pagina_folha'],
     "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_registro', 'data_do_evento', 'pai_do_noivo', 'mae_do_noivo', 'fonte_livro', 'fonte_pagina_folha'],
@@ -453,7 +473,7 @@ def main_app():
     with tab_add:
         st.header("Adicionar Novo Registro")
         all_books = get_distinct_values("fonte_livro")
-        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro"))))
+        all_locations = sorted(list(set(get_distinct_values("local_do_evento") + get_distinct_values("local_do_registro")))
 
         col1, col2 = st.columns(2)
         with col1:
@@ -500,7 +520,21 @@ def main_app():
                             default_value = book_preset
                         elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
                             default_value = location_preset
-                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                        
+                        if field == "Tipo de Ato":
+                            entries[to_col_name(field)] = st.selectbox(
+                                f"{field}:",
+                                options=TIPOS_DE_ATO,
+                                index=None,
+                                placeholder="Selecione um tipo...",
+                                key=f"add_{to_col_name(field)}"
+                            )
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                value=default_value, 
+                                key=f"add_{to_col_name(field)}"
+                            )
 
                     # Filamento horizontal ANTES de "Partes Envolvidas"
                     st.markdown("<hr>", unsafe_allow_html=True)
@@ -521,7 +555,11 @@ def main_app():
                             default_value = book_preset
                         elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
                             default_value = location_preset
-                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                        entries[to_col_name(field)] = st.text_input(
+                            f"{field}:", 
+                            value=default_value, 
+                            key=f"add_{to_col_name(field)}"
+                        )
                 else:
                     # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
                     for field in fields:
@@ -530,7 +568,21 @@ def main_app():
                             default_value = book_preset
                         elif (field == "Local do Evento" or field == "Local do Registro") and location_preset: 
                             default_value = location_preset
-                        entries[to_col_name(field)] = st.text_input(f"{field}:", value=default_value, key=f"add_{to_col_name(field)}")
+                        
+                        if field == "Tipo de Ato":
+                            entries[to_col_name(field)] = st.selectbox(
+                                f"{field}:",
+                                options=TIPOS_DE_ATO,
+                                index=None,
+                                placeholder="Selecione um tipo...",
+                                key=f"add_{to_col_name(field)}"
+                            )
+                        else:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                value=default_value, 
+                                key=f"add_{to_col_name(field)}"
+                            )
 
                 submitted = st.form_submit_button(f"Adicionar Registro de {record_type}")
                 
@@ -780,7 +832,20 @@ def main_app():
                             for field in fields[:partes_index]:
                                 col_name = to_col_name(field)
                                 current_value = record.get(col_name, "")
-                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                                
+                                if field == "Tipo de Ato":
+                                    updated_entries[col_name] = st.selectbox(
+                                        f"{field}:",
+                                        options=TIPOS_DE_ATO,
+                                        index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
+                                        key=f"edit_{col_name}"
+                                    )
+                                else:
+                                    updated_entries[col_name] = st.text_input(
+                                        f"{field}:", 
+                                        value=current_value, 
+                                        key=f"edit_{col_name}"
+                                    )
 
                             # Filamento horizontal ANTES de "Partes Envolvidas"
                             st.markdown("<hr>", unsafe_allow_html=True)
@@ -802,13 +867,30 @@ def main_app():
                             for field in fields[partes_index+1:]:
                                 col_name = to_col_name(field)
                                 current_value = record.get(col_name, "")
-                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                                updated_entries[col_name] = st.text_input(
+                                    f"{field}:", 
+                                    value=current_value, 
+                                    key=f"edit_{col_name}"
+                                )
                         else:
                             # Para tipos de registro que não têm "Partes Envolvidas", renderizar todos os campos normalmente
                             for field in fields:
                                 col_name = to_col_name(field)
                                 current_value = record.get(col_name, "")
-                                updated_entries[col_name] = st.text_input(f"{field}:", value=current_value, key=f"edit_{col_name}")
+                                
+                                if field == "Tipo de Ato":
+                                    updated_entries[col_name] = st.selectbox(
+                                        f"{field}:",
+                                        options=TIPOS_DE_ATO,
+                                        index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
+                                        key=f"edit_{col_name}"
+                                    )
+                                else:
+                                    updated_entries[col_name] = st.text_input(
+                                        f"{field}:", 
+                                        value=current_value, 
+                                        key=f"edit_{col_name}"
+                                    )
 
                         submitted = st.form_submit_button("Salvar Alterações")
                         
