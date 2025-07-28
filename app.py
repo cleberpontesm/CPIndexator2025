@@ -810,19 +810,27 @@ def main_app():
         # Usamos colunas para um layout mais organizado.
         st.markdown("---")
         st.caption("Opções de Visualização da Tabela")
-        col_vis1, col_vis2 = st.columns(2)
+        col_vis1, col_vis2, col_vis3 = st.columns(3)
         with col_vis1:
-            show_parents = st.checkbox(
-                "Exibir Pais / Noiva e Pais", 
+            show_birth_parents = st.checkbox(
+                "Exibir Pais (Nasc./Bat.)", 
                 value=False, 
-                key="show_parents",
-                help="Marque para mostrar colunas adicionais com os nomes dos pais (em batismos) e da noiva/pais dos noivos (em casamentos)."
+                key="show_birth_parents",
+                help="Marque para mostrar as colunas 'Nome do Pai' e 'Nome da Mãe'."
             )
         with col_vis2:
+            show_marriage_info = st.checkbox(
+                "Exibir Noiva e Pais (Cas.)", 
+                value=False, 
+                key="show_marriage_info",
+                help="Marque para mostrar as colunas com os dados da noiva e dos pais dos noivos."
+            )
+        with col_vis3:
             show_grandparents = st.checkbox(
                 "Exibir Avós", 
                 value=False, 
-                key="show_grandparents"
+                key="show_grandparents",
+                help="Marque para mostrar as colunas dos avós."
             )
         st.markdown("---")
         # --- FIM DA MODIFICAÇÃO ---
