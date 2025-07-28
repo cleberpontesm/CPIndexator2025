@@ -106,17 +106,17 @@ TIPOS_DE_ATO = [
 ]
 
 TABLE_COLUMNS = {
-    "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_registro', 'data_do_evento', 'nome_do_pai', 'nome_da_mae', 'fonte_livro', 'fonte_pagina_folha'],
-    "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_registro', 'data_do_evento', 'pai_do_noivo', 'mae_do_noivo', 'fonte_livro', 'fonte_pagina_folha'],
-    "Óbito": ['id', 'nome_do_falecido', 'data_do_registro', 'data_do_obito', 'idade_no_obito', 'fonte_livro', 'fonte_pagina_folha'],
-    "Notas": ['id', 'tipo_de_ato', 'data_do_registro', 'partes_envolvidas', 'resumo_do_teor', 'fonte_livro', 'fonte_pagina_folha']
+    "Nascimento/Batismo": ['id', 'nome_do_registrado', 'data_do_registro', 'data_do_evento', 'fonte_livro', 'fonte_pagina_folha'],
+    "Casamento": ['id', 'nome_do_noivo', 'nome_da_noiva', 'data_do_registro', 'data_do_evento', 'fonte_livro', 'fonte_pagina_folha'],
+    "Óbito": ['id', 'nome_do_falecido', 'data_do_registro', 'data_do_obito', 'fonte_livro', 'fonte_pagina_folha'],
+    "Notas": ['id', 'tipo_de_ato', 'data_do_registro', 'fonte_livro', 'fonte_pagina_folha']
 }
 
 SEARCH_CATEGORIES = {
     "Nomes": [
-        'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'nome_do_noivo', 'nome_da_noiva', 
-        'nome_do_falecido', 'padrinhos', 'testemunhas', 'pai_do_noivo', 'mae_do_noivo', 
-        'pai_da_noiva', 'mae_da_noiva', 'avo_paterno', 'avo_paterna', 'avo_materno', 
+        'nome_do_registrado', 'nome_do_pai', 'nome_da_mae', 'nome_do_noivo', 'nome_da_noiva',
+        'nome_do_falecido', 'padrinhos', 'testemunhas', 'pai_do_noivo', 'mae_do_noivo',
+        'pai_da_noiva', 'mae_da_noiva', 'avo_paterno', 'avo_paterna', 'avo_materno',
         'avo_materna', 'conjuge_sobrevivente', 'filiacao', 'partes_envolvidas'
     ],
     "Locais": [
@@ -212,7 +212,7 @@ def formatar_timestamp_para_exibicao(ts):
         return str(ts)
 
 def fetch_records(search_term="", selected_books=None, search_categories=None):
-    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
+    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página', 'Criado Por']
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
 
@@ -275,6 +275,9 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                 if 'data_do_registro' in df.columns:
                     df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
 
+                # Adicione a coluna de folha/página
+                df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
+
                 # Aplica a formatação de email
                 if 'criado_por' in df.columns:
                     df['criado_por'] = df['criado_por'].apply(formatar_email_para_exibicao)
@@ -290,17 +293,14 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                 # Define as colunas a serem exibidas na ordem desejada
                 columns_to_show = [
                     'id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 
-                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
+                    'Folha/Página', 'criado_por'
                 ]
                 
                 rename_dict = {
                     'id': 'ID',
                     'tipo_registro': 'Tipo',
                     'fonte_livro': 'Livro Fonte',
-                    'criado_por': 'Criado Por',
-                    'ultima_alteracao_por': 'Alterado Por',
-                    'criado_em': 'Criado Em',
-                    'atualizado_em': 'Alterado Em'
+                    'criado_por': 'Criado Por'
                 }
                 
                 final_cols = [col for col in columns_to_show if col in df.columns]
@@ -366,7 +366,12 @@ def generate_pdf_table(records_by_type):
             for _, row in df_filtered.iterrows():
                 row_data = []
                 for col in columns_to_show:
-                    value = str(row[col]) if pd.notna(row[col]) else ''
+                    value_raw = row[col]
+                    if col == 'fonte_pagina_folha':
+                        value = str(value_raw) if pd.notna(value_raw) else '—'
+                    else:
+                        value = str(value_raw) if pd.notna(value_raw) else ''
+
                     if len(value) > 50: value = value[:47] + '...'
                     if col == 'partes_envolvidas': value = value.replace(';', ', ')
                     row_data.append(value)
@@ -404,19 +409,25 @@ def generate_pdf_detailed(records_by_type):
                     fields_order = [col for col in EXPORT_COLUMN_ORDER[record_type] if col in record]
 
                 for field in fields_order:
-                    if field in record and pd.notna(record[field]) and record[field] != '':
+                    if field in record and ((pd.notna(record[field]) and record[field] != '') or field == 'fonte_pagina_folha'):
                         label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
                         value = str(record[field])
-                        if field in ['criado_por', 'ultima_alteracao_por']:
+                        
+                        if field == 'fonte_pagina_folha':
+                            value = str(record[field]) if pd.notna(record[field]) and record[field] != '' else '—'
+                        elif field in ['criado_por', 'ultima_alteracao_por']:
                             value = formatar_email_para_exibicao(value)
                         elif field in ['criado_em', 'atualizado_em']:
                             value = formatar_timestamp_para_exibicao(record[field])
                         elif field == 'partes_envolvidas':
                             value = value.replace(';', '<br/>- ')
                             value = f"- {value}"
+                        
                         if len(value) > 60:
                             value = Paragraph(value, styles['Normal'])
+                        
                         data.append([Paragraph(f"<b>{label}:</b>", field_style), value])
+
                 if not data: data.append([Paragraph("Sem dados disponíveis", field_style), ""])
                 table = ReportlabTable(data, colWidths=[2.5*inch, 4*inch]);
                 table.setStyle(TableStyle([
@@ -1131,7 +1142,7 @@ def main_app():
                                 st.info("Exclusão cancelada.")
                     except Exception as e:
                         st.error(f"Erro ao processar IDs: {e}")
-        
+    
     with tab_export:
         st.header("Exportar Dados")
         if EXPORT_LIBS_AVAILABLE:
