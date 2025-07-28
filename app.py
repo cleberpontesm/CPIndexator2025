@@ -212,8 +212,15 @@ def formatar_timestamp_para_exibicao(ts):
         # Fallback caso o dado não seja um timestamp válido
         return str(ts)
 
-def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None):
-    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página', 'Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
+def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_parents=False, show_grandparents=False):
+    base_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página']
+    if show_parents:
+        base_columns.extend(['Nome do Pai', 'Nome da Mãe'])
+    if show_grandparents:
+        base_columns.extend(['Avô Paterno', 'Avó Paterna', 'Avô Materno', 'Avó Materna'])
+    meta_columns = ['Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
+    new_columns = base_columns + meta_columns
+
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
 
@@ -306,22 +313,20 @@ def fetch_records(search_term="", selected_books=None, search_categories=None, p
                 
                 # Define as colunas a serem exibidas na ordem desejada
                 columns_to_show = [
-                    'id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 'Folha/Página',
-                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
+                    'id', 'tipo_registro', 'Nome Principal', 'Data'
                 ]
+                if show_parents:
+                    columns_to_show.extend(['nome_do_pai', 'nome_da_mae'])
+                if show_grandparents:
+                    columns_to_show.extend(['avo_paterno', 'avo_paterna', 'avo_materno', 'avo_materna'])
                 
-                rename_dict = {
-                    'id': 'ID',
-                    'tipo_registro': 'Tipo',
-                    'fonte_livro': 'Livro Fonte',
-                    'criado_por': 'Criado Por',
-                    'ultima_alteracao_por': 'Alterado Por',
-                    'criado_em': 'Criado Em',
-                    'atualizado_em': 'Alterado Em'
-                }
+                columns_to_show.extend([
+                    'fonte_livro', 'Folha/Página',
+                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
+                ])
                 
                 final_cols = [col for col in columns_to_show if col in df.columns or col in ['Nome Principal', 'Data', 'Folha/Página']]
-                return df[final_cols].rename(columns=rename_dict)
+                return df[final_cols].rename(columns=COLUMN_LABELS)
             else:
                 return pd.DataFrame(columns=new_columns)
 
@@ -811,7 +816,7 @@ def main_app():
                     }
                 </style>
                 """, unsafe_allow_html=True)
-                        
+                            
             selected_books_manage = st.sidebar.multiselect(
                 "Filtrar por Livro(s):", 
                 all_books_manage, 
@@ -863,12 +868,16 @@ def main_app():
             - Use o botão "Limpar Filtros" para resetar
             """)
 
+        st.sidebar.subheader("Opções de Visualização da Tabela")
+        show_parents = st.sidebar.checkbox("Exibir Nomes dos Pais", value=False, key="show_parents")
+        show_grandparents = st.sidebar.checkbox("Exibir Nomes dos Avós", value=False, key="show_grandparents")
+
         if not selected_books_manage:
             st.warning("Por favor, selecione ao menos um livro no filtro.")
         else:
             import time
             start_time = time.time()
-            df_records = fetch_records(search_term, selected_books_manage, search_categories, pagina_filter)
+            df_records = fetch_records(search_term, selected_books_manage, search_categories, pagina_filter, show_parents=show_parents, show_grandparents=show_grandparents)
             search_time = time.time() - start_time
             
             if not df_records.empty:
