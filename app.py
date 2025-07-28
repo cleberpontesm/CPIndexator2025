@@ -211,7 +211,7 @@ def formatar_timestamp_para_exibicao(ts):
         # Fallback caso o dado não seja um timestamp válido
         return str(ts)
 
-def fetch_records(search_term="", selected_books=None, search_categories=None):
+def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None):
     new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página', 'Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
@@ -220,6 +220,13 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
         with engine.connect() as conn:
             base_query = "SELECT * FROM registros WHERE fonte_livro = ANY(:books)"
             params = {'books': selected_books}
+
+            if pagina_filter:
+                base_query += " AND CAST(fonte_pagina_folha AS TEXT) ILIKE :pagina"
+                params['pagina'] = f'%{pagina_filter}%'
+
+            # Ordenação robusta que trata strings com números (ex: '10v' > '9')
+            order_clause = " ORDER BY fonte_livro, NULLIF(regexp_replace(fonte_pagina_folha, '[^0-9].*$', ''), '')::integer NULLS LAST, fonte_pagina_folha"
 
             if search_term:
                 if search_categories and len(search_categories) > 0:
@@ -244,12 +251,12 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                 
                 if search_conditions:
                     search_logic = f" AND ({' OR '.join(search_conditions)})"
-                    query = base_query + search_logic + " ORDER BY id"
+                    query = base_query + search_logic + order_clause
                     params['search_term'] = f'%{search_term}%'
                 else:
-                    query = base_query + " ORDER BY id"
+                    query = base_query + order_clause
             else:
-                query = base_query + " ORDER BY id"
+                query = base_query + order_clause
 
             result = conn.execute(text(query), params)
             df = pd.DataFrame(result.fetchall())
@@ -290,8 +297,10 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
 
                 # Aplica a formatação de timestamp
                 if 'criado_em' in df.columns:
+                    df['criado_em'] = pd.to_datetime(df['criado_em'], errors='coerce')
                     df['criado_em'] = df['criado_em'].apply(formatar_timestamp_para_exibicao)
                 if 'atualizado_em' in df.columns:
+                    df['atualizado_em'] = pd.to_datetime(df['atualizado_em'], errors='coerce')
                     df['atualizado_em'] = df['atualizado_em'].apply(formatar_timestamp_para_exibicao)
                 
                 # Define as colunas a serem exibidas na ordem desejada
@@ -418,17 +427,19 @@ def generate_pdf_detailed(records_by_type):
                 for field in fields_order:
                     if field in record and ((pd.notna(record[field]) and record[field] != '') or field == 'fonte_pagina_folha'):
                         label = COLUMN_LABELS.get(field, field.replace('_', ' ').title())
-                        value = str(record[field])
+                        value_raw = record[field]
                         
                         if field == 'fonte_pagina_folha':
-                            value = str(record[field]) if pd.notna(record[field]) and record[field] != '' else '—'
+                            value = str(value_raw) if pd.notna(value_raw) and value_raw != '' else '—'
                         elif field in ['criado_por', 'ultima_alteracao_por']:
-                            value = formatar_email_para_exibicao(value)
+                            value = formatar_email_para_exibicao(str(value_raw))
                         elif field in ['criado_em', 'atualizado_em']:
-                            value = formatar_timestamp_para_exibicao(record[field])
+                            value = formatar_timestamp_para_exibicao(pd.to_datetime(value_raw, errors='coerce'))
                         elif field == 'partes_envolvidas':
-                            value = value.replace(';', '<br/>- ')
+                            value = str(value_raw).replace(';', '<br/>- ')
                             value = f"- {value}"
+                        else:
+                            value = str(value_raw)
                         
                         if len(value) > 60:
                             value = Paragraph(value, styles['Normal'])
@@ -586,6 +597,12 @@ def main_app():
                                 placeholder="DD/MM/AAAA",
                                 key=f"add_{to_col_name(field)}"
                             )
+                        elif field == "Fonte (Página/Folha)":
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:",
+                                help="Exemplos: '12', '15v' (para verso), '34-36' (para intervalos)",
+                                key=f"add_{to_col_name(field)}"
+                            )
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
@@ -620,6 +637,12 @@ def main_app():
                                 )
                                 if st.session_state.fixar_livro and entries[to_col_name(field)]:
                                     st.session_state.livro_fixo = entries[to_col_name(field)]
+                        elif field == "Fonte (Página/Folha)":
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:",
+                                help="Exemplos: '12', '15v' (para verso), '34-36' (para intervalos)",
+                                key=f"add_{to_col_name(field)}"
+                            )
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
@@ -716,6 +739,12 @@ def main_app():
                                 placeholder="DD/MM/AAAA",
                                 key=f"add_{to_col_name(field)}"
                             )
+                        elif field == "Fonte (Página/Folha)":
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:",
+                                help="Exemplos: '12', '15v' (para verso), '34-36' (para intervalos)",
+                                key=f"add_{to_col_name(field)}"
+                            )
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
@@ -783,6 +812,8 @@ def main_app():
                 key="manage_books_select"
             )
 
+        pagina_filter = st.sidebar.text_input("Filtrar por página/folha:", help="Busca por parte do número da folha/página. Ex: '15' encontrará '15', '15v', etc.")
+
         st.sidebar.subheader("🔍 Busca Avançada")
         search_term = st.sidebar.text_input("Termo de Busca:", help="Digite qualquer palavra ou frase que deseja encontrar")
         
@@ -830,7 +861,7 @@ def main_app():
         else:
             import time
             start_time = time.time()
-            df_records = fetch_records(search_term, selected_books_manage, search_categories)
+            df_records = fetch_records(search_term, selected_books_manage, search_categories, pagina_filter)
             search_time = time.time() - start_time
             
             if not df_records.empty:
@@ -920,7 +951,7 @@ def main_app():
                             if key in ['criado_por', 'ultima_alteracao_por']:
                                 display_value = formatar_email_para_exibicao(value)
                             elif key in ['criado_em', 'atualizado_em']:
-                                display_value = formatar_timestamp_para_exibicao(value)
+                                display_value = formatar_timestamp_para_exibicao(pd.to_datetime(value, errors='coerce'))
                             elif key == 'partes_envolvidas':
                                 display_value = str(value).replace(';', ' | ')
                             
