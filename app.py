@@ -1214,22 +1214,26 @@ def main_app():
             )
             
             if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
-                if not ids_to_delete:
-                    st.error("Por favor, insira pelo menos um ID para excluir.")
-                else:
-                    try:
-                        id_list = [int(id_val.strip()) for id_val in ids_to_delete.split(",") if id_val.strip().isdigit()]
-                        
-                        if not id_list:
-                            st.error("Nenhum ID válido encontrado.")
-                        else:
-                            with st.expander("CONFIRMAR EXCLUSÃO MÚLTIPLA", expanded=True):
-                                st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
-                                confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
-                                
-                                if st.button("EXCLUIR AGORA", disabled=not confirm):
-                                    try:
-                                        with engine.connect() as conn:
+    if not ids_to_delete:
+        st.error("Por favor, insira pelo menos um ID para excluir.")
+    else:
+        try:
+            # ... processamento dos IDs ...
+            if not id_list:
+                st.error("Nenhum ID válido encontrado.")
+            else:
+                # O problema começa aqui. O código dentro deste expander
+                # só aparece DEPOIS que o botão acima é clicado e a página recarrega.
+                with st.expander("CONFIRMAR EXCLUSÃO MÚLTIPLA", expanded=True):
+                    st.warning(...)
+                    confirm = st.checkbox(...) # Este checkbox é recriado a cada execução
+
+                    # Este botão depende do estado do checkbox
+                    if st.button("EXCLUIR AGORA", disabled=not confirm):
+                        # ... lógica de exclusão ...
+                        st.rerun() # Este rerun finaliza o processo
+        except Exception as e:
+            st.error(f"Erro ao processar IDs: {e}")
                                             # Executando a exclusão em uma transação
                                             with conn.begin():
                                                 for record_id in id_list:
