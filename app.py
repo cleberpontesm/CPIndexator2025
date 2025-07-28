@@ -1000,7 +1000,6 @@ def main_app():
                                 except Exception as e: 
                                     st.error(f"Ocorreu um erro ao atualizar: {e}")
                     else:
-                    else:
                         # Para outros tipos de registro (sem partes envolvidas dinâmicas)
                         with st.form("edit_record_form"):
                             st.info(f"Editando registro de {record_type}")
