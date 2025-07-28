@@ -320,10 +320,6 @@ def fetch_records(search_term="", selected_books=None, search_categories=None, p
         st.info("Verifique se a estrutura do banco de dados está correta.")
         return pd.DataFrame(columns=all_possible_display_cols)
 
-    except Exception as e:
-        st.error(f"Erro ao buscar registros: {str(e)}")
-        st.info("Verifique se a estrutura do banco de dados está correta.")
-        return pd.DataFrame(columns=all_possible_cols)
 
 def fetch_single_record(record_id):
     with engine.connect() as conn:
@@ -491,17 +487,35 @@ def main_app():
     admin_list = st.secrets.get("ADMIN_USERS", [])
     is_admin = user_email in admin_list
 
-    tabs_to_create = ["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados"]
-    if is_admin: tabs_to_create.append("⚙️ Administração")
+    # --- INÍCIO DA GRANDE MUDANÇA: SISTEMA DE ABAS MANUAL ---
 
-    created_tabs = st.tabs(tabs_to_create)
-    tab_add, tab_manage, tab_export = created_tabs[0], created_tabs[1], created_tabs[2]
-    if is_admin: tab_admin = created_tabs[3]
+    # Define as abas disponíveis
+    tabs = ["➕ Adicionar Registro", "🔍 Consultar e Gerenciar", "📤 Exportar Dados"]
+    if is_admin:
+        tabs.append("⚙️ Administração")
 
-    # ... (o código para tab_add, tab_manage, e tab_export permanece o mesmo) ...
-    # ... (vou omiti-los aqui para focar na mudança, mas eles não mudam) ...
+    # Inicializa a aba ativa no session_state se ela não existir
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = tabs[0] # Começa na primeira aba
 
-    with tab_add:
+    # Função de callback para atualizar a aba ativa
+    def set_active_tab():
+        st.session_state.active_tab = st.session_state.radio_tabs
+
+    # Usa st.radio com aparência de abas para controlar o estado
+    st.radio(
+        label="Navegação",
+        options=tabs,
+        key="radio_tabs", # Chave para o session_state
+        on_change=set_active_tab, # Callback para atualizar nosso estado manual
+        horizontal=True,
+        label_visibility="collapsed" # Esconde o rótulo "Navegação"
+    )
+
+    # Renderiza o conteúdo da aba com base no estado que controlamos
+    # Em vez de 'with tab_add:', usamos 'if st.session_state.active_tab == "nome_da_aba":'
+    
+    if st.session_state.active_tab == "➕ Adicionar Registro":
         st.header("Adicionar Novo Registro")
         
         # Inicializa as variáveis de sessão para os checkboxes
@@ -786,7 +800,7 @@ def main_app():
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao salvar: {e}")
                             
-    with tab_manage:
+    elif st.session_state.active_tab == "🔍 Consultar e Gerenciar":
         st.header("Consultar Registros")
 
         # --- INÍCIO DA MODIFICAÇÃO ---
@@ -834,7 +848,7 @@ def main_app():
                     }
                 </style>
                 """, unsafe_allow_html=True)
-                            
+                        
             selected_books_manage = st.sidebar.multiselect(
                 "Filtrar por Livro(s):", 
                 all_books_manage, 
@@ -976,7 +990,7 @@ def main_app():
                 action = st.session_state.manage_action
                 st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
                 st.markdown("---")
-               
+                
                 if action == "view":
                     for key, value in record.items():
                         if value:
@@ -1219,8 +1233,8 @@ def main_app():
                                         st.error(f"Erro durante a exclusão: {e}")
                     except Exception as e:
                         st.error(f"Erro ao processar IDs: {e}")
-    
-    with tab_export:
+
+    elif st.session_state.active_tab == "📤 Exportar Dados":
         st.header("Exportar Dados")
         if EXPORT_LIBS_AVAILABLE:
             all_books_export = get_distinct_values("fonte_livro")
@@ -1263,170 +1277,168 @@ def main_app():
                             st.error(f"Erro ao gerar arquivo: {e}")
         else: 
             st.error("Bibliotecas de exportação não instaladas. Instale openpyxl e reportlab.")
+    
+    elif st.session_state.active_tab == "⚙️ Administração" and is_admin:
+        st.header("⚙️ Administração do Banco de Dados")
+        st.markdown("---")
+        
+        st.subheader("Alimentar Banco de Dados com Excel")
+        st.info("Esta função permite adicionar múltiplos registros de um arquivo, definindo um Livro Fonte único para todos eles.")
 
+        # Passo 1: Selecionar o tipo de registro
+        record_type_upload = st.selectbox(
+            "1. Selecione o Tipo de Registro para o upload:",
+            list(FORM_DEFINITIONS.keys()),
+            index=None,
+            placeholder="Selecione o tipo...",
+            key="upload_record_type"
+        )
 
-    # --- INÍCIO DA SEÇÃO MODIFICADA ---
-    if is_admin:
-        with tab_admin:
-            st.header("⚙️ Administração do Banco de Dados")
-            st.markdown("---")
-            
-            st.subheader("Alimentar Banco de Dados com Excel")
-            st.info("Esta função permite adicionar múltiplos registros de um arquivo, definindo um Livro Fonte único para todos eles.")
+        # Passo 2: Fornecer o nome do livro fonte (NOVO CAMPO)
+        book_source_upload = st.text_input(
+            "2. Informe o Nome do Livro Fonte para este arquivo:",
+            placeholder="Ex: Livro de Batismos 1880-1890",
+            key="upload_book_source"
+        )
 
-            # Passo 1: Selecionar o tipo de registro
-            record_type_upload = st.selectbox(
-                "1. Selecione o Tipo de Registro para o upload:",
-                list(FORM_DEFINITIONS.keys()),
-                index=None,
-                placeholder="Selecione o tipo...",
-                key="upload_record_type"
-            )
+        # Passo 3: Fazer o upload do arquivo
+        uploaded_excel_file = st.file_uploader(
+            "3. Escolha um arquivo Excel (.xlsx)",
+            type="xlsx",
+            key="excel_uploader"
+        )
 
-            # Passo 2: Fornecer o nome do livro fonte (NOVO CAMPO)
-            book_source_upload = st.text_input(
-                "2. Informe o Nome do Livro Fonte para este arquivo:",
-                placeholder="Ex: Livro de Batismos 1880-1890",
-                key="upload_book_source"
-            )
+        if st.button("Iniciar Importação do Excel", type="primary"):
+            # Validação Crítica: Verificar se todos os campos foram preenchidos
+            book_name = book_source_upload.strip()
+            if not record_type_upload or not book_name or not uploaded_excel_file:
+                st.error("Erro: Todos os três campos (Tipo de Registro, Nome do Livro e Arquivo) são obrigatórios.")
+                st.stop() # Interrompe a execução
 
-            # Passo 3: Fazer o upload do arquivo
-            uploaded_excel_file = st.file_uploader(
-                "3. Escolha um arquivo Excel (.xlsx)",
-                type="xlsx",
-                key="excel_uploader"
-            )
-
-            if st.button("Iniciar Importação do Excel", type="primary"):
-                # Validação Crítica: Verificar se todos os campos foram preenchidos
-                book_name = book_source_upload.strip()
-                if not record_type_upload or not book_name or not uploaded_excel_file:
-                    st.error("Erro: Todos os três campos (Tipo de Registro, Nome do Livro e Arquivo) são obrigatórios.")
-                    st.stop() # Interrompe a execução
-
-                try:
-                    df = pd.read_excel(uploaded_excel_file, dtype=str).fillna('')
-                    
-                    # Renomeia as colunas do Excel para o formato do banco de dados
-                    original_columns = df.columns.tolist()
-                    column_mapping = {col: to_col_name(col) for col in original_columns}
-                    df.rename(columns=column_mapping, inplace=True)
-
-                    # Atribuição Forçada do Livro Fonte (A LÓGICA CHAVE)
-                    # Cria ou substitui a coluna 'fonte_livro' com o valor da interface.
-                    df['fonte_livro'] = book_name
-
-                    st.write("Pré-visualização dos dados a serem importados (Livro Fonte atribuído):", df.head())
-
-                    # Adiciona as colunas de metadados
-                    now_utc = datetime.now(timezone.utc)
-                    df['tipo_registro'] = record_type_upload
-                    df['criado_em'] = now_utc
-                    df['atualizado_em'] = now_utc
-                    df['criado_por'] = user_email
-                    df['ultima_alteracao_por'] = user_email
-                    
-                    # Remove colunas que não existem na tabela de destino para evitar erros
-                    db_cols = get_table_columns()
-                    df_filtered = df[[col for col in df.columns if col in db_cols]]
-
-                    # Salva os novos registros no banco de dados (modo 'append')
-                    with engine.connect() as conn:
-                        with conn.begin(): # Usando uma transação
-                            df_filtered.to_sql('registros', conn, if_exists='append', index=False)
-                    
-                    st.success(f"Importação concluída com sucesso! {len(df_filtered)} novos registros foram adicionados ao livro '{book_name}'.")
-                    st.balloons()
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
-                    st.warning("Verifique se as colunas no arquivo Excel (exceto 'Fonte (Livro)') correspondem aos campos do formulário.")
-            
-            st.markdown("---")
-            st.subheader("Gerenciar Livros")
-
-            # Renomear Livro
-            with st.expander("Renomear um Livro"):
-                all_books_admin = get_distinct_values("fonte_livro")
-                book_to_rename = st.selectbox("Livro de Origem", options=all_books_admin, index=None, key="rename_book_select")
-                new_book_name = st.text_input("Novo Nome do Livro", key="new_book_name_input")
+            try:
+                df = pd.read_excel(uploaded_excel_file, dtype=str).fillna('')
                 
-                if st.button("Renomear Livro", key="rename_book_btn"):
-                    if not book_to_rename or not new_book_name.strip():
-                        st.warning("Selecione um livro de origem e digite um novo nome.")
-                    elif new_book_name.strip() in all_books_admin:
-                        st.error(f"O nome '{new_book_name.strip()}' já existe. Escolha outro nome.")
-                    else:
-                        try:
-                            with engine.connect() as conn:
-                                with conn.begin():
-                                    query = text("UPDATE registros SET fonte_livro = :new_name WHERE fonte_livro = :old_name")
-                                    conn.execute(query, {"new_name": new_book_name.strip(), "old_name": book_to_rename})
-                            st.success(f"O livro '{book_to_rename}' foi renomeado para '{new_book_name.strip()}'.")
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao renomear o livro: {e}")
+                # Renomeia as colunas do Excel para o formato do banco de dados
+                original_columns = df.columns.tolist()
+                column_mapping = {col: to_col_name(col) for col in original_columns}
+                df.rename(columns=column_mapping, inplace=True)
 
-            # Excluir Livro
-            with st.expander("Excluir Registros de um Livro"):
-                all_books_admin_del = get_distinct_values("fonte_livro")
-                book_to_delete = st.selectbox("Livro a ser Excluído", options=all_books_admin_del, index=None, key="delete_book_select")
+                # Atribuição Forçada do Livro Fonte (A LÓGICA CHAVE)
+                # Cria ou substitui a coluna 'fonte_livro' com o valor da interface.
+                df['fonte_livro'] = book_name
+
+                st.write("Pré-visualização dos dados a serem importados (Livro Fonte atribuído):", df.head())
+
+                # Adiciona as colunas de metadados
+                now_utc = datetime.now(timezone.utc)
+                df['tipo_registro'] = record_type_upload
+                df['criado_em'] = now_utc
+                df['atualizado_em'] = now_utc
+                df['criado_por'] = user_email
+                df['ultima_alteracao_por'] = user_email
                 
-                if book_to_delete:
-                    confirm_delete_book = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE todos os registros do livro '{book_to_delete}'.", key="confirm_delete_book_check")
-                    if st.button("Excluir Livro Inteiro", disabled=not confirm_delete_book, type="primary"):
-                        try:
-                            with engine.connect() as conn:
-                                with conn.begin():
-                                    query = text("DELETE FROM registros WHERE fonte_livro = :book_name")
-                                    result = conn.execute(query, {"book_name": book_to_delete})
-                            st.success(f"Todos os {result.rowcount} registros do livro '{book_to_delete}' foram excluídos.")
-                            st.cache_data.clear()
-                            st.cache_resource.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao excluir os registros do livro: {e}")
+                # Remove colunas que não existem na tabela de destino para evitar erros
+                db_cols = get_table_columns()
+                df_filtered = df[[col for col in df.columns if col in db_cols]]
+
+                # Salva os novos registros no banco de dados (modo 'append')
+                with engine.connect() as conn:
+                    with conn.begin(): # Usando uma transação
+                        df_filtered.to_sql('registros', conn, if_exists='append', index=False)
+                
+                st.success(f"Importação concluída com sucesso! {len(df_filtered)} novos registros foram adicionados ao livro '{book_name}'.")
+                st.balloons()
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
+                st.warning("Verifique se as colunas no arquivo Excel (exceto 'Fonte (Livro)') correspondem aos campos do formulário.")
+        
+        st.markdown("---")
+        st.subheader("Gerenciar Livros")
+
+        # Renomear Livro
+        with st.expander("Renomear um Livro"):
+            all_books_admin = get_distinct_values("fonte_livro")
+            book_to_rename = st.selectbox("Livro de Origem", options=all_books_admin, index=None, key="rename_book_select")
+            new_book_name = st.text_input("Novo Nome do Livro", key="new_book_name_input")
             
-            st.markdown("---")
-            st.subheader("Backup e Restauração")
-            
-            # Exportar Backup CSV
-            with st.expander("Exportar Backup Completo (CSV)"):
-                st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
-                if st.button("Gerar Arquivo de Backup (CSV)"):
+            if st.button("Renomear Livro", key="rename_book_btn"):
+                if not book_to_rename or not new_book_name.strip():
+                    st.warning("Selecione um livro de origem e digite um novo nome.")
+                elif new_book_name.strip() in all_books_admin:
+                    st.error(f"O nome '{new_book_name.strip()}' já existe. Escolha outro nome.")
+                else:
                     try:
                         with engine.connect() as conn:
-                            df = pd.read_sql_table('registros', conn)
-                            csv = df.to_csv(index=False).encode('utf-8')
-                            st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
-                    except Exception as e: 
-                        st.error(f"Erro ao exportar o banco de dados: {e}")
+                            with conn.begin():
+                                query = text("UPDATE registros SET fonte_livro = :new_name WHERE fonte_livro = :old_name")
+                                conn.execute(query, {"new_name": new_book_name.strip(), "old_name": book_to_rename})
+                        st.success(f"O livro '{book_to_rename}' foi renomeado para '{new_book_name.strip()}'.")
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao renomear o livro: {e}")
 
-            # Importar de CSV (Substituir)
-            with st.expander("Importar de um Backup (Substituir Tudo)"):
-                st.warning("🚨 **Atenção:** A importação de CSV irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
-                uploaded_file_csv = st.file_uploader("Escolha um arquivo CSV de backup", type="csv", key="csv_uploader")
-                if uploaded_file_csv is not None:
-                    confirm_import_csv = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
-                    if st.button("Iniciar Importação do CSV", disabled=not confirm_import_csv):
-                        try:
-                            df_to_import = pd.read_csv(uploaded_file_csv)
-                            with engine.connect() as conn:
-                                with conn.begin():
-                                    conn.execute(text("DELETE FROM registros"))
-                                    df_to_import.to_sql('registros', conn, if_exists='append', index=False)
-                                st.success(f"Importação concluída! {len(df_to_import)} registros importados.")
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro durante a importação: {e}")
-                            st.info("A operação foi revertida. Seus dados antigos estão seguros.")
+        # Excluir Livro
+        with st.expander("Excluir Registros de um Livro"):
+            all_books_admin_del = get_distinct_values("fonte_livro")
+            book_to_delete = st.selectbox("Livro a ser Excluído", options=all_books_admin_del, index=None, key="delete_book_select")
+            
+            if book_to_delete:
+                confirm_delete_book = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE todos os registros do livro '{book_to_delete}'.", key="confirm_delete_book_check")
+                if st.button("Excluir Livro Inteiro", disabled=not confirm_delete_book, type="primary"):
+                    try:
+                        with engine.connect() as conn:
+                            with conn.begin():
+                                query = text("DELETE FROM registros WHERE fonte_livro = :book_name")
+                                result = conn.execute(query, {"book_name": book_to_delete})
+                        st.success(f"Todos os {result.rowcount} registros do livro '{book_to_delete}' foram excluídos.")
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao excluir os registros do livro: {e}")
+        
+        st.markdown("---")
+        st.subheader("Backup e Restauração")
+        
+        # Exportar Backup CSV
+        with st.expander("Exportar Backup Completo (CSV)"):
+            st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
+            if st.button("Gerar Arquivo de Backup (CSV)"):
+                try:
+                    with engine.connect() as conn:
+                        df = pd.read_sql_table('registros', conn)
+                        csv = df.to_csv(index=False).encode('utf-8')
+                        st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
+                except Exception as e: 
+                    st.error(f"Erro ao exportar o banco de dados: {e}")
+
+        # Importar de CSV (Substituir)
+        with st.expander("Importar de um Backup (Substituir Tudo)"):
+            st.warning("🚨 **Atenção:** A importação de CSV irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
+            uploaded_file_csv = st.file_uploader("Escolha um arquivo CSV de backup", type="csv", key="csv_uploader")
+            if uploaded_file_csv is not None:
+                confirm_import_csv = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
+                if st.button("Iniciar Importação do CSV", disabled=not confirm_import_csv):
+                    try:
+                        df_to_import = pd.read_csv(uploaded_file_csv)
+                        with engine.connect() as conn:
+                            with conn.begin():
+                                conn.execute(text("DELETE FROM registros"))
+                                df_to_import.to_sql('registros', conn, if_exists='append', index=False)
+                        st.success(f"Importação concluída! {len(df_to_import)} registros importados.")
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro durante a importação: {e}")
+                        st.info("A operação foi revertida. Seus dados antigos estão seguros.")
+    # --- FIM DA GRANDE MUDANÇA ---
 
 # --- ROTEADOR PRINCIPAL ---
 if 'user' not in st.session_state:
