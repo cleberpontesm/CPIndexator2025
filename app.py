@@ -1203,7 +1203,7 @@ def main_app():
                         except Exception as e: 
                             st.error(f"Erro ao excluir: {e}")
             
-            # --- INÍCIO DO BLOCO CORRIGIDO ---
+            # --- INÍCIO DO BLOCO CORRIGIDO E COM NOVA FUNCIONALIDADE ---
             st.markdown("---")
             st.subheader("Excluir Múltiplos Registros")
             st.warning("Esta funcionalidade permite excluir vários registros de uma vez. Use com cuidado!")
@@ -1215,19 +1215,45 @@ def main_app():
                 st.session_state.ids_to_delete_list = []
 
             ids_to_delete_input = st.text_input(
-                "IDs para excluir (separados por vírgula):",
-                help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789",
+                "IDs para excluir (separados por vírgula ou em intervalo):",
+                help="Use vírgulas para IDs avulsos (ex: 5, 8, 12) ou traço para intervalos (ex: 1-30). Pode combinar ambos (ex: 1-10, 15, 20-25).",
                 key="multi_delete_input"
             )
 
             # Botão principal para INICIAR o processo de exclusão
             if st.button("Revisar para Exclusão Múltipla", key="review_delete_multiple_btn"):
                 if not ids_to_delete_input:
-                    st.error("Por favor, insira pelo menos um ID para excluir.")
+                    st.error("Por favor, insira pelo menos um ID ou intervalo para excluir.")
                     st.session_state.pending_multi_delete = False # Garante que o estado seja falso
                 else:
                     try:
-                        id_list = [int(id_val.strip()) for id_val in ids_to_delete_input.split(",") if id_val.strip().isdigit()]
+                        final_ids = set()
+                        parts = ids_to_delete_input.split(',')
+
+                        for part in parts:
+                            part = part.strip()
+                            if not part:
+                                continue
+
+                            if '-' in part:
+                                # Trata como um intervalo (range)
+                                try:
+                                    start_str, end_str = part.split('-')
+                                    start = int(start_str.strip())
+                                    end = int(end_str.strip())
+                                    if start <= end:
+                                        final_ids.update(range(start, end + 1))
+                                except ValueError:
+                                    # Ignora partes malformadas como '1-a' ou '1-2-3'
+                                    st.warning(f"O intervalo '{part}' é inválido e será ignorado.")
+                                    pass
+                            elif part.isdigit():
+                                # Trata como número único
+                                final_ids.add(int(part))
+                            else:
+                                st.warning(f"A entrada '{part}' não é um ID válido e será ignorada.")
+                        
+                        id_list = sorted(list(final_ids))
                         
                         if not id_list:
                             st.error("Nenhum ID numérico válido foi encontrado na sua entrada.")
@@ -1281,7 +1307,7 @@ def main_app():
                             st.session_state.pending_multi_delete = False
                             st.session_state.ids_to_delete_list = []
                             st.rerun()
-            # --- FIM DO BLOCO CORRIGIDO ---
+            # --- FIM DO BLOCO CORRIGIDO E COM NOVA FUNCIONALIDADE ---
 
 
     elif st.session_state.active_tab == "📤 Exportar Dados":
