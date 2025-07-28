@@ -212,15 +212,17 @@ def formatar_timestamp_para_exibicao(ts):
         # Fallback caso o dado não seja um timestamp válido
         return str(ts)
 
-def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_parents=False, show_grandparents=False):
+def fetch_records(search_term="", selected_books=None, search_categories=None, pagina_filter=None, show_birth_parents=False, show_marriage_info=False, show_grandparents=False):
     # Nomes de exibição exatos como definidos em COLUMN_LABELS
     base_display_cols = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página']
     meta_display_cols = ['Criado Por', 'Criado Em', 'Última Alteração Por', 'Atualizado Em']
 
     # Colunas opcionais que podem ser adicionadas
     optional_display_cols = []
-    if show_parents:
-        optional_display_cols.extend(['Nome da Noiva', 'Nome do Pai', 'Nome da Mãe', 'Pai do Noivo', 'Mãe do Noivo', 'Pai da Noiva', 'Mãe da Noiva'])
+    if show_birth_parents:
+        optional_display_cols.extend(['Nome do Pai', 'Nome da Mãe'])
+    if show_marriage_info:
+        optional_display_cols.extend(['Nome da Noiva', 'Pai do Noivo', 'Mãe do Noivo', 'Pai da Noiva', 'Mãe da Noiva'])
     if show_grandparents:
         optional_display_cols.extend(['Avô Paterno', 'Avó Paterna', 'Avô Materno', 'Avó Materna'])
 
