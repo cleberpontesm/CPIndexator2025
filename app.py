@@ -89,7 +89,8 @@ TIPOS_DE_ATO = [
     "Procuração Pública",
     "Testamento",
     "Escritura de Compra e Venda",
-    "Escritura Compra e Venda de Escravos",
+    "Escritura de Compra e Venda de Escravos",
+    "Escritura de Perfilhação/Reconhecimento de filhos"
     "Escritura de Dote",
     "Escritura de Emancipação",
     "Escritura de Doação",
