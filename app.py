@@ -562,6 +562,12 @@ def main_app():
                                 placeholder="Selecione um tipo...",
                                 key=f"add_{to_col_name(field)}"
                             )
+                        elif field in ["Data do Registro", "Data do Evento", "Data do Óbito"]:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                placeholder="DD/MM/AAAA",
+                                key=f"add_{to_col_name(field)}"
+                            )
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
@@ -686,6 +692,12 @@ def main_app():
                                 placeholder="Selecione um tipo...",
                                 key=f"add_{to_col_name(field)}"
                             )
+                        elif field in ["Data do Registro", "Data do Evento", "Data do Óbito"]:
+                            entries[to_col_name(field)] = st.text_input(
+                                f"{field}:", 
+                                placeholder="DD/MM/AAAA",
+                                key=f"add_{to_col_name(field)}"
+                            )
                         else:
                             entries[to_col_name(field)] = st.text_input(
                                 f"{field}:", 
@@ -745,7 +757,7 @@ def main_app():
                     }
                 </style>
                 """, unsafe_allow_html=True)
-                    
+                        
             selected_books_manage = st.sidebar.multiselect(
                 "Filtrar por Livro(s):", 
                 all_books_manage, 
@@ -943,6 +955,13 @@ def main_app():
                                         index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
                                         key=f"edit_{col_name}"
                                     )
+                                elif field in ["Data do Registro", "Data do Evento", "Data do Óbito"]:
+                                    updated_entries[col_name] = st.text_input(
+                                        f"{field}:", 
+                                        value=current_value, 
+                                        placeholder="DD/MM/AAAA",
+                                        key=f"edit_{col_name}"
+                                    )
                                 else:
                                     updated_entries[col_name] = st.text_input(
                                         f"{field}:", 
@@ -1016,6 +1035,13 @@ def main_app():
                                         f"{field}:",
                                         options=TIPOS_DE_ATO,
                                         index=TIPOS_DE_ATO.index(current_value) if current_value in TIPOS_DE_ATO else None,
+                                        key=f"edit_{col_name}"
+                                    )
+                                elif field in ["Data do Registro", "Data do Evento", "Data do Óbito"]:
+                                    updated_entries[col_name] = st.text_input(
+                                        f"{field}:", 
+                                        value=current_value, 
+                                        placeholder="DD/MM/AAAA",
                                         key=f"edit_{col_name}"
                                     )
                                 else:
@@ -1105,7 +1131,7 @@ def main_app():
                                 st.info("Exclusão cancelada.")
                     except Exception as e:
                         st.error(f"Erro ao processar IDs: {e}")
-            
+        
     with tab_export:
         st.header("Exportar Dados")
         if EXPORT_LIBS_AVAILABLE:
