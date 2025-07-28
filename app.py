@@ -788,6 +788,30 @@ def main_app():
                             
     with tab_manage:
         st.header("Consultar Registros")
+
+        # --- INÍCIO DA MODIFICAÇÃO ---
+        # As opções de visualização foram movidas da sidebar para o corpo principal da aba.
+        # Usamos colunas para um layout mais organizado.
+        st.markdown("---")
+        st.caption("Opções de Visualização da Tabela")
+        col_vis1, col_vis2 = st.columns(2)
+        with col_vis1:
+            show_parents = st.checkbox(
+                "Exibir Pais / Noiva e Pais", 
+                value=False, 
+                key="show_parents",
+                help="Marque para mostrar colunas adicionais com os nomes dos pais (em batismos) e da noiva/pais dos noivos (em casamentos)."
+            )
+        with col_vis2:
+            show_grandparents = st.checkbox(
+                "Exibir Avós", 
+                value=False, 
+                key="show_grandparents"
+            )
+        st.markdown("---")
+        # --- FIM DA MODIFICAÇÃO ---
+
+        # A lógica da sidebar para os filtros de busca permanece a mesma
         st.sidebar.header("Filtros de Consulta")
         all_books_manage = get_distinct_values("fonte_livro")
 
@@ -795,6 +819,7 @@ def main_app():
             st.warning("Nenhum livro encontrado no banco de dados. Adicione registros primeiro.")
             selected_books_manage = []
         else:
+            # ... (O resto do código da sidebar para selecionar livros, etc., continua aqui sem alterações)
             col_select_all, _ = st.sidebar.columns([1, 3])
             with col_select_all:
                 if st.button("Selecionar Todos", key="select_all_books", use_container_width=True):
@@ -818,10 +843,8 @@ def main_app():
             )
 
         pagina_filter = st.sidebar.text_input("Filtrar por página/folha:", help="Busca por parte do número da folha/página. Ex: '15' encontrará '15', '15v', etc.")
-
         st.sidebar.subheader("🔍 Busca Avançada")
         search_term = st.sidebar.text_input("Termo de Busca:", help="Digite qualquer palavra ou frase que deseja encontrar")
-        
         search_categories = st.sidebar.multiselect(
             "Buscar nas Categorias:",
             options=list(SEARCH_CATEGORIES.keys()),
@@ -830,6 +853,12 @@ def main_app():
             key="search_categories_select"
         )
         
+        # ... (O restante do código da sidebar e da aba continua exatamente como estava antes)
+        # É crucial que você REMOVA as linhas antigas que estavam na sidebar:
+        # st.sidebar.subheader("Opções de Visualização da Tabela") -> REMOVER
+        # show_parents = st.sidebar.checkbox(...) -> REMOVER
+        # show_grandparents = st.sidebar.checkbox(...) -> REMOVER
+
         if search_categories:
             st.sidebar.info(f"🎯 Buscando apenas em: {', '.join(search_categories)}")
             with st.sidebar.expander("Ver campos incluídos"):
@@ -860,10 +889,6 @@ def main_app():
             - Combine termo + categoria para busca específica
             - Use o botão "Limpar Filtros" para resetar
             """)
-
-        st.sidebar.subheader("Opções de Visualização da Tabela")
-        show_parents = st.sidebar.checkbox("Exibir Nomes dos Pais", value=False, key="show_parents")
-        show_grandparents = st.sidebar.checkbox("Exibir Nomes dos Avós", value=False, key="show_grandparents")
 
         if not selected_books_manage:
             st.warning("Por favor, selecione ao menos um livro no filtro.")
@@ -906,6 +931,7 @@ def main_app():
 
             st.markdown("---")
             st.header("Gerenciar Registro Selecionado")
+            # O restante do código de gerenciamento (editar, excluir, etc.) continua o mesmo...
             record_id_to_manage = st.number_input(
                 "Digite o ID do registro e tecle ENTER para ver detalhes, editar ou excluir:", 
                 min_value=1, 
@@ -950,7 +976,7 @@ def main_app():
                 action = st.session_state.manage_action
                 st.subheader(f"Ação: {action.title()} | Registro ID: {record_id}")
                 st.markdown("---")
-
+               
                 if action == "view":
                     for key, value in record.items():
                         if value:
