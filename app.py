@@ -1213,7 +1213,7 @@ def main_app():
                 help="Digite os IDs dos registros que deseja excluir, separados por vírgula. Ex: 123, 456, 789"
             )
             
-            if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
+                    if st.button("Confirmar Exclusão Múltipla", type="primary", key="delete_multiple_btn"):
     if not ids_to_delete:
         st.error("Por favor, insira pelo menos um ID para excluir.")
     else:
