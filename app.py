@@ -168,6 +168,7 @@ def to_col_name(field_name):
     clean_name = field_name.lower().replace("ã", "a").replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ç", "c").replace("ô", "o").replace("â", "a").replace("õ", "o")
     return clean_name.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").replace("?", "")
 
+@st.cache_data(ttl=300) # Cache por 5 minutos para performance
 def get_distinct_values(column_name):
     with engine.connect() as conn:
         try:
@@ -483,6 +484,8 @@ def main_app():
     if st.sidebar.button("Sair (Logout)"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
+        st.cache_data.clear()
+        st.cache_resource.clear()
         st.rerun()
 
     st.title("CPIndexator - Painel Principal")
@@ -679,6 +682,8 @@ def main_app():
                                 conn.execute(text(query), params)
                                 conn.commit()
                                 st.success("Registro adicionado com sucesso!")
+                                st.cache_data.clear() # Limpa o cache para atualizar os filtros
+                                st.cache_resource.clear()
                                 if 'num_partes' in st.session_state:
                                     del st.session_state.num_partes
                                 st.rerun()
@@ -777,6 +782,8 @@ def main_app():
                                 conn.execute(text(query), params)
                                 conn.commit()
                                 st.success("Registro adicionado com sucesso!")
+                                st.cache_data.clear() # Limpa o cache para atualizar os filtros
+                                st.cache_resource.clear()
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Ocorreu um erro ao salvar: {e}")
@@ -1062,6 +1069,8 @@ def main_app():
                                         conn.execute(query, params)
                                         conn.commit()
                                         st.success("Registro atualizado com sucesso!")
+                                        st.cache_data.clear()
+                                        st.cache_resource.clear()
                                         del st.session_state.manage_action
                                         if 'edit_num_partes' in st.session_state: 
                                             del st.session_state.edit_num_partes
@@ -1120,6 +1129,8 @@ def main_app():
                                         conn.execute(query, params)
                                         conn.commit()
                                         st.success("Registro atualizado com sucesso!")
+                                        st.cache_data.clear()
+                                        st.cache_resource.clear()
                                         del st.session_state.manage_action
                                         st.rerun()
                                 except Exception as e: 
@@ -1133,6 +1144,8 @@ def main_app():
                                 conn.execute(text("DELETE FROM registros WHERE id = :id"), {'id': record_id})
                                 conn.commit()
                                 st.success("Registro excluído com sucesso!")
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
                                 del st.session_state.manage_action
                                 del st.session_state.record_id
                                 st.rerun()
@@ -1158,26 +1171,24 @@ def main_app():
                         if not id_list:
                             st.error("Nenhum ID válido encontrado.")
                         else:
-                            st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
-                            confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
-                            
-                            if confirm:
-                                try:
-                                    with engine.connect() as conn:
-                                        params = [{"id_val": id_val} for id_val in id_list]
+                            with st.expander("CONFIRMAR EXCLUSÃO MÚLTIPLA", expanded=True):
+                                st.warning(f"Você está prestes a excluir {len(id_list)} registros. Esta ação é irreversível.")
+                                confirm = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE os registros com os IDs: {', '.join(map(str, id_list))}")
+                                
+                                if st.button("EXCLUIR AGORA", disabled=not confirm):
+                                    try:
+                                        with engine.connect() as conn:
+                                            # Executando a exclusão em uma transação
+                                            with conn.begin():
+                                                for record_id in id_list:
+                                                    conn.execute(text("DELETE FROM registros WHERE id = :id_val"), {"id_val": record_id})
                                         
-                                        result = conn.execute(
-                                            text("DELETE FROM registros WHERE id = :id_val"),
-                                            params
-                                        )
-                                        conn.commit()
-                                        
-                                        st.success(f"{result.rowcount} registros excluídos com sucesso!")
+                                        st.success(f"{len(id_list)} registros excluídos com sucesso!")
+                                        st.cache_data.clear()
+                                        st.cache_resource.clear()
                                         st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro durante a exclusão: {e}")
-                            else:
-                                st.info("Exclusão cancelada.")
+                                    except Exception as e:
+                                        st.error(f"Erro durante a exclusão: {e}")
                     except Exception as e:
                         st.error(f"Erro ao processar IDs: {e}")
     
@@ -1251,7 +1262,7 @@ def main_app():
                 if record_type_upload:
                     if st.button("Iniciar Importação do Excel", type="primary"):
                         try:
-                            df = pd.read_excel(uploaded_excel_file)
+                            df = pd.read_excel(uploaded_excel_file, dtype=str).fillna('')
                             st.write("Pré-visualização dos dados carregados:", df.head())
 
                             # Renomeia as colunas do Excel para o formato do banco de dados
@@ -1267,16 +1278,16 @@ def main_app():
                             df['criado_por'] = user_email
                             df['ultima_alteracao_por'] = user_email
                             
-                            # Converte colunas que podem ser problemáticas para string
-                            for col in df.columns:
-                                if df[col].dtype == 'object':
-                                    df[col] = df[col].astype(str).fillna('')
-                            
                             # Salva os novos registros no banco de dados (modo 'append')
-                            df.to_sql('registros', engine, if_exists='append', index=False)
+                            with engine.connect() as conn:
+                                with conn.begin(): # Usando uma transação
+                                    df.to_sql('registros', conn, if_exists='append', index=False)
                             
                             st.success(f"Importação concluída com sucesso! {len(df)} novos registros foram adicionados.")
                             st.balloons()
+                            st.cache_data.clear()
+                            st.cache_resource.clear()
+                            st.rerun()
 
                         except Exception as e:
                             st.error(f"Ocorreu um erro durante a importação do Excel: {e}")
@@ -1285,38 +1296,87 @@ def main_app():
                     st.error("Por favor, selecione o 'Tipo de Registro' antes de iniciar a importação.")
             
             st.markdown("---")
-            st.subheader("Exportar Backup Completo")
-            st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
-            if st.button("Gerar Arquivo de Backup (CSV)"):
-                try:
-                    with engine.connect() as conn:
-                        df = pd.read_sql_table('registros', conn)
-                        csv = df.to_csv(index=False).encode('utf-8')
-                        st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
-                except Exception as e: 
-                    st.error(f"Erro ao exportar o banco de dados: {e}")
+            st.subheader("Gerenciar Livros")
 
-            st.markdown("---")
-            st.subheader("Importar de um Backup (Substituir Tudo)")
-            st.warning("🚨 **Atenção:** A importação de CSV irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
-            uploaded_file = st.file_uploader("Escolha um arquivo CSV de backup", type="csv")
-            if uploaded_file is not None:
-                confirm_import = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
-                if st.button("Iniciar Importação do CSV", disabled=not confirm_import):
-                    if confirm_import:
+            # Renomear Livro
+            with st.expander("Renomear um Livro"):
+                all_books_admin = get_distinct_values("fonte_livro")
+                book_to_rename = st.selectbox("Livro de Origem", options=all_books_admin, index=None, key="rename_book_select")
+                new_book_name = st.text_input("Novo Nome do Livro", key="new_book_name_input")
+                
+                if st.button("Renomear Livro", key="rename_book_btn"):
+                    if not book_to_rename or not new_book_name.strip():
+                        st.warning("Selecione um livro de origem e digite um novo nome.")
+                    elif new_book_name.strip() in all_books_admin:
+                        st.error(f"O nome '{new_book_name.strip()}' já existe. Escolha outro nome.")
+                    else:
                         try:
-                            df_to_import = pd.read_csv(uploaded_file)
+                            with engine.connect() as conn:
+                                with conn.begin():
+                                    query = text("UPDATE registros SET fonte_livro = :new_name WHERE fonte_livro = :old_name")
+                                    conn.execute(query, {"new_name": new_book_name.strip(), "old_name": book_to_rename})
+                            st.success(f"O livro '{book_to_rename}' foi renomeado para '{new_book_name.strip()}'.")
+                            st.cache_data.clear()
+                            st.cache_resource.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao renomear o livro: {e}")
+
+            # Excluir Livro
+            with st.expander("Excluir Registros de um Livro"):
+                all_books_admin_del = get_distinct_values("fonte_livro")
+                book_to_delete = st.selectbox("Livro a ser Excluído", options=all_books_admin_del, index=None, key="delete_book_select")
+                
+                if book_to_delete:
+                    confirm_delete_book = st.checkbox(f"Confirmo que desejo excluir PERMANENTEMENTE todos os registros do livro '{book_to_delete}'.", key="confirm_delete_book_check")
+                    if st.button("Excluir Livro Inteiro", disabled=not confirm_delete_book, type="primary"):
+                        try:
+                            with engine.connect() as conn:
+                                with conn.begin():
+                                    query = text("DELETE FROM registros WHERE fonte_livro = :book_name")
+                                    result = conn.execute(query, {"book_name": book_to_delete})
+                            st.success(f"Todos os {result.rowcount} registros do livro '{book_to_delete}' foram excluídos.")
+                            st.cache_data.clear()
+                            st.cache_resource.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao excluir os registros do livro: {e}")
+            
+            st.markdown("---")
+            st.subheader("Backup e Restauração")
+            
+            # Exportar Backup CSV
+            with st.expander("Exportar Backup Completo (CSV)"):
+                st.info("Esta função exporta **todos** os registros da tabela para um arquivo CSV.")
+                if st.button("Gerar Arquivo de Backup (CSV)"):
+                    try:
+                        with engine.connect() as conn:
+                            df = pd.read_sql_table('registros', conn)
+                            csv = df.to_csv(index=False).encode('utf-8')
+                            st.download_button("📥 Baixar Backup CSV", csv, "cpindexator_backup_completo.csv", "text/csv")
+                    except Exception as e: 
+                        st.error(f"Erro ao exportar o banco de dados: {e}")
+
+            # Importar de CSV (Substituir)
+            with st.expander("Importar de um Backup (Substituir Tudo)"):
+                st.warning("🚨 **Atenção:** A importação de CSV irá **APAGAR TODOS OS REGISTROS ATUAIS** antes de carregar os novos dados.")
+                uploaded_file_csv = st.file_uploader("Escolha um arquivo CSV de backup", type="csv", key="csv_uploader")
+                if uploaded_file_csv is not None:
+                    confirm_import_csv = st.checkbox("Confirmo que entendo que todos os dados atuais serão substituídos.")
+                    if st.button("Iniciar Importação do CSV", disabled=not confirm_import_csv):
+                        try:
+                            df_to_import = pd.read_csv(uploaded_file_csv)
                             with engine.connect() as conn:
                                 with conn.begin():
                                     conn.execute(text("DELETE FROM registros"))
                                     df_to_import.to_sql('registros', conn, if_exists='append', index=False)
                                 st.success(f"Importação concluída! {len(df_to_import)} registros importados.")
+                                st.cache_data.clear()
+                                st.cache_resource.clear()
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Erro durante a importação: {e}")
                             st.info("A operação foi revertida. Seus dados antigos estão seguros.")
-                    else: 
-                        st.error("Você precisa confirmar a ação para continuar.")
 
 # --- ROTEADOR PRINCIPAL ---
 if 'user' not in st.session_state:
