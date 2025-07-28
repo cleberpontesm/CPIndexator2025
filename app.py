@@ -212,7 +212,7 @@ def formatar_timestamp_para_exibicao(ts):
         return str(ts)
 
 def fetch_records(search_term="", selected_books=None, search_categories=None):
-    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página', 'Criado Por']
+    new_columns = ['ID', 'Tipo', 'Nome Principal', 'Data', 'Livro Fonte', 'Folha/Página', 'Criado Por', 'Criado Em', 'Alterado Por', 'Alterado Em']
     if not selected_books:
         return pd.DataFrame(columns=new_columns)
 
@@ -276,7 +276,11 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                     df.loc[df['tipo_registro'] == 'Notas', 'Data'] = df['data_do_registro']
 
                 # Adicione a coluna de folha/página
-                df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
+                if 'fonte_pagina_folha' in df.columns:
+                    df['Folha/Página'] = df['fonte_pagina_folha'].fillna('N/A')
+                else:
+                    df['Folha/Página'] = 'N/A'
+
 
                 # Aplica a formatação de email
                 if 'criado_por' in df.columns:
@@ -292,18 +296,21 @@ def fetch_records(search_term="", selected_books=None, search_categories=None):
                 
                 # Define as colunas a serem exibidas na ordem desejada
                 columns_to_show = [
-                    'id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 
-                    'Folha/Página', 'criado_por'
+                    'id', 'tipo_registro', 'Nome Principal', 'Data', 'fonte_livro', 'Folha/Página',
+                    'criado_por', 'criado_em', 'ultima_alteracao_por', 'atualizado_em'
                 ]
                 
                 rename_dict = {
                     'id': 'ID',
                     'tipo_registro': 'Tipo',
                     'fonte_livro': 'Livro Fonte',
-                    'criado_por': 'Criado Por'
+                    'criado_por': 'Criado Por',
+                    'ultima_alteracao_por': 'Alterado Por',
+                    'criado_em': 'Criado Em',
+                    'atualizado_em': 'Alterado Em'
                 }
                 
-                final_cols = [col for col in columns_to_show if col in df.columns]
+                final_cols = [col for col in columns_to_show if col in df.columns or col in ['Nome Principal', 'Data', 'Folha/Página']]
                 return df[final_cols].rename(columns=rename_dict)
             else:
                 return pd.DataFrame(columns=new_columns)
