@@ -826,7 +826,7 @@ def main_app():
             )
         with col_vis3:
             show_grandparents = st.checkbox(
-                "Exibir Avós", 
+                "Exibir Avós (Nasc./Bat.)", 
                 value=False, 
                 key="show_grandparents",
                 help="Marque para mostrar as colunas dos avós."
