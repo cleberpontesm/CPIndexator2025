@@ -815,21 +815,21 @@ def main_app():
                 "Exibir Pais (Nasc./Bat.)", 
                 value=False, 
                 key="show_birth_parents",
-                help="Marque para mostrar as colunas 'Nome do Pai' e 'Nome da Mãe'."
+                help="Marque para mostrar as colunas 'Nome do Pai' e 'Nome da Mãe' nos registros de nascimento/batismo."
             )
         with col_vis2:
             show_marriage_info = st.checkbox(
                 "Exibir Noiva e Pais (Cas.)", 
                 value=False, 
                 key="show_marriage_info",
-                help="Marque para mostrar as colunas com os dados da noiva e dos pais dos noivos."
+                help="Marque para mostrar as colunas com os dados da noiva e dos pais dos noivos nos registros de casamento."
             )
         with col_vis3:
             show_grandparents = st.checkbox(
                 "Exibir Avós (Nasc./Bat.)", 
                 value=False, 
                 key="show_grandparents",
-                help="Marque para mostrar as colunas dos avós."
+                help="Marque para mostrar as colunas dos avós nos registros de nascimento/batismo."
             )
         st.markdown("---")
         # --- FIM DA MODIFICAÇÃO ---
